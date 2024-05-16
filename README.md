@@ -11,4 +11,10 @@ Also, it add various improvements based on recently analize of MSX hardware
 include analize in Japan that is unknown in world wide.
 Read "What's new.txt" to see more detail.
 
+Get Latest Release here.
+https://github.com/TomiokaH01/fMSX3DS/tags
 https://gbatemp.net/threads/release-fmsx3ds-msx-msx2-msx2-emulator-with-new-feature-for-3ds.637072/
+
+Attention: fMSX3DS is MIT license , but original fMSX is'nt.
+Also it contains many library of other license.
+Please read header of the each files.
