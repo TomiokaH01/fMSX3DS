@@ -1,0 +1,77 @@
+; Special Cartridge
+E18E2F78,ASC16,none		; Dragon Sprits Demo by Tiny Yarou
+AC3F3DEF,Konami5,none		; Tera Cresta Demo by Tiny Yarou
+
+5E594F91,ASC16,none		; FMPCM Demo by Laurens Holst(Kabukichou no Joou by Ringo Sheena)
+685160DA,ASC16,none		; FMPCM Demo by Laurens Holst(Kabukichou no Joou by Ringo Sheena)
+1CF20F49,ASC16,none		; FMPCM Demo by Laurens Holst(Kabukichou no Joou by Ringo Sheena)
+5B4A5287,ASC16,none		; FMPCM Demo by Laurens Holst(Kabukichou no Joou by Ringo Sheena)
+F6686519,ASC16,none		; FMPCM Demo by Laurens Holst(The Powerpuff Girls)
+50440231,ASC16,none		; FMPCM Demo by Laurens Holst(Star Ocean3)
+
+5D6C4D27,FMPAC,none		; FM Pana Amusement Cartridge(Panasonic)
+0E84505D,FMPAC,none		; FM Pana Amusement Cartridge(Panasonic)(64kb)
+
+;Konimai SCCPlus hacked ROMs
+037D1ED8,SCCPLUS,none		; Antarctic Adventure(SCC Plus)(Konami)
+619B4B4A,SCCPLUS,none		; Gradius(Nemesis)(SCC Plus)(Konami)
+14CCB2FD,SCCPLUS,none		; Hyper Rally(SCC Plus)(Konami)
+2CA8E6BF,SCCPLUS,none		; Hyper Rally(SCC Plus)(Konami)
+04A889BF,SCCPLUS,none		; Hyper Sports 2(SCC Plus)(Konami)
+62F1531C,SCCPLUS,none		; Hyper Sports 2(SCC Plus)(Konami)
+408070C4,SCCPLUS,none		; Konami's Boxing(SCC Plus)(Konami)
+0E8EFD8B,SCCPLUS,none		; Konami's Boxing(SCC Plus)(Konami)
+DBC8B11B,SCCPLUS,none		; Majyo Densetsu(Knightmare)(SCC Plus)(Konami)
+1EC24C26,SCCPLUS,none		; Pippols(SCC Plus)(Konami)
+9EA714C2,SCCPLUS,none		; Pippols(SCC Plus)(Konami)
+6616395A,SCCPLUS,none		; Road Fighter(SCC Plus)(Konami)
+39B45611,SCCPLUS,none		; Road Fighter(SCC Plus)(Konami)
+8A4B51BC,SCCPLUS,none		; Super Cobra(SCC Plus)(Konami)
+4A653152,SCCPLUS,none		; Twin Bee(SCC Plus)(Konami)
+97A62DBA,SCCPLUS,none		; Twin Bee(SCC Plus)(Konami)
+F338052F,SCCPLUS,none		; Video Hustler Konami's Billiards(SCC Plus)(Konami)
+7A5FEC5A,SCCPLUS,none		; Video Hustler Konami's Billiards(SCC Plus)(Konami)
+278114CD,SCCPLUS,none		; Yie Ar Kung-Fu(SCC Plus)(Konami)
+C080159C,SCCPLUS,none		; Yie Ar Kung-Fu 2(SCC Plus)(Konami)
+
+1E39B051,SCCPLUS_2,none		; KonamiSCC for SD Snatcher
+27020604,SCCPLUS_2,none		; KonamiSCC for SD Snatcher
+01403624,SCCPLUS_2,none		; KonamiSCC for SD Snatcher
+
+; MSX2 MegaROMs
+EC7A8012,ASC8,SRAM8		; Daikoukai Jidai (Koei)
+623C6D85,Generic8,none		; Daiva Story 4 (T&E Soft)
+413D4700,ASC8,SRAM8		; Europa Sensen(Europe War) (Koei) 
+075AB646,ASC8,SRAM8		; Genchou Hishi  - Aoki Ookami to Shiroki Mejika(Koei)
+E0E72736,MAJUTSUSHI,none	; Hai no Majutsushi (Konami)
+8BC34DCA,ASC8,SRAM8		; Isin no Arashi(Koei)
+F26A017A,Konami5,none		; King Kong 2(Konami)
+C7521809,ASC8,SRAM8		; Lempereur (Koei)
+7070A805,Konami5,mb2flh		; Manbow 2 (Sunrise)
+C90474D4,Konami5,mb2flh		; Manbow 2 (Sunrise)
+653F1C73,ASC8,SRAM8		; Nobunaga no Yabou - Zenkoku Ban (Koei)
+B83AA6F5,ASC8,SRAM8		; Sangokushi(Koei)
+187D3A21,ASC8,SRAM8		; Suikoden - Tenmei no Chikai(Koei)
+8DF9945A,ASC16_2,SRAM2		; Super Daisenryaku (Micro Cabin)
+4203FEB9,SLR,none		; Super Lode Runner (IREM)
+E6C7A2BD,Konami5,none		; SuperOry2-Enigma(MSXdev 2023)
+C31F459C,ASC8,SRAM8		; Teitoku no Ketsudan(Koei)
+20A7C2E9,ASC8,,none		; Utopia Demo(by Dvik & Joyrex)
+08A5CA60,WIZ,SRAM2		; Wizardry (ASCII)
+
+
+; MSX1 MegaROMs
+71A1B1EC,DOOLY,none		; Baby Dinosaur Dooly (Daou)
+6E7BE17E,ASC16,none		; Freedom Fighter(v1.2) (MSXdev 2020)
+4EAD5098,ASC8,SRAM8		; Genghis Khan (Koei)
+B9B0999A,SYNTHE,none		; Konami's Synthesizer(Konami)
+8C2A49B2,SYNTHE,none		; Konami's Synthesizer(Konami)
+565022A4,Konami5,none		; Lotus F3 (MSXdev 2006)
+A29176E3,ASC16,none		; Mecha9 - Oscar Toledo G
+0189BBAA,ASC8,none		; Memory (MSXdev 2022)
+3AA33A30,ASC8,SRAM8		; Nobunag no Yabou - Zenkoku Ban (Koei)
+2DAF3080,Rtype,none		; R-type (IREM)(FM Sound Fixed)
+EC34F9F2,ASC16,none		; R-type (IREM)(Converted to ASCII 16)
+C59B86A1,SWANGI,none		; Super Swangi(Super Altered Beast)(Clover Soft)
+80A5DBB8,Konami4,none		; Uchu Yohei (FranChesstein) (MSXdev 2023)
+258609D4,WingWarr,none		; Wing Warrior(Kitmaker Entertainment Inc)
