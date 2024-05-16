@@ -12,7 +12,7 @@ include analize in Japan that is unknown in world wide.
 Read "What's new.txt" to see more detail.
 
 Get Latest Release here.
-https://github.com/TomiokaH01/fMSX3DS/tags
+https://github.com/TomiokaH01/fMSX3DS/releases
 
 https://gbatemp.net/threads/release-fmsx3ds-msx-msx2-msx2-emulator-with-new-feature-for-3ds.637072/
 
