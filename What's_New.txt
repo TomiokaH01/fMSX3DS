@@ -1,0 +1,98 @@
+v1.00(First Release)
+-Add support for +PCM (ADPCM Voice Sampling hardware).fMSX3DS is the first emulator to support this.
+ No commercial game support this hardware. but, some japanese homebrew/doujin game support this.
+ Especially noteworthy, Pleasure Hearts (the legendary homebrew made by author of Judgement Silversword, ESCHATOS)
+ support this!
+http://hp.vector.co.jp/authors/VA011751/MSXSR8-2.HTM
+ To use this, Choose "[Option]" item in the fMSX3DS system menu,
+and change option item "<Input/Output Hardware Option>/Printer Port" to "PCM+".
+
+-Add support for the Voice Box (PCM Voice Sampling hardware).fMSX3DS is the first emulator to support this.
+ As to commercial games, Only one game (Isseki ni kakeru Seishun by LOG) support this hardware.
+http://hirosedou.sblo.jp/article/93257998.html
+ To use this, Choose "[Option]" item in the fMSX3DS system menu,
+and change option item "<Input/Output Hardware Option>/Printer Port" to "Voice Box".
+
+-Add support for Nintendo3DS's 800px wide mode. In Addition, add suport for interlace mode.
+ So, fMSX3DS can emulate games pixel perfect that use 512x424 resolution mode.
+
+-Implement audio emulation by Mitsutaka Okazaki(emu2413.c etc.) with latest version.
+ It's not the legacy version of over 20 year ago that many emulator uses, but latest(2022) one. 
+ In Addition, import some features from LibKSS such as Audio filtering, Konami SCC detect.
+ https://github.com/digital-sound-antiques
+
+-Added horizontal hardware scroll emulation for MSX2+
+
+-Improve YJK 19268 color mode for MSX2+.
+
+-Add ability to show MSX2+ boot screen.(Need Kanji Basic ROM(MSXKANJI.rom or KNJDRV.ROM or A1WXKDR.ROM).)
+
+-Add support for VDP command ops in Screen 0-4 for MSX2+.
+
+-Improve Konami SCC and SCC-I detection and add ability to load virtual SCC-I ROM cartridge.
+ Support SD Snatcher, Snatcher, Konami Game Collection, many kids of SCC hacked ROMs etc.
+ Also support SCC and SCC-I for many kinds of music driver used for many Disk magazine
+ or Music Disks(NV magazine, Disk Mail Magazine, etc.).
+
+-Improve Disk Read.This brings many disks to work.
+ (Ys 1: Ancient Ys Vanished, Konami Game Collection Disk Station's Art Gallary,
+ Many shumps made by Yoshida Kensetsu(Twinkle Star, Sea Sardine etc.) Anma's Relax, etc.)
+
+-Improve VDP timing, This fixes many graphic glitch and adjast speed for many games.
+ AshGuine2, Undeadline, The Fantasm Soldier Valis II(Intro timming), MegaDoom, etc.
+ And this brings many games to wrork(Rune Master II etc.).
+
+-Add support for voice sampling in many games such as Madou Monogatari 1-2-3, Aleste2, Princess maker,
+ Laydock, Super Laydock, Laydock 2, Ninja Kage, Bosconian etc.
+
+-Improve Save State.
+ (Now you can State save in Space Manbow intro, YS II intro etc.)
+
+-Improve Sprite collision(Manbow2, 10lines hero, Pooyan New、Litter Box(MSXdev'20), URDIUM(MSXdev2014),
+ Waves demo (by Dvik & Joyrex) and many kinds of games especially made by BASIC works correctly now).
+
+-Improve cycles of z80 CPU instructions(Seleniak(MSXdev'04), Retaliot(MSXdev'09) become working.
+ The title screen of Bosconian shows correct image).
+
+-Improve Z80 CPU emulation.(Sweet Acorn, MSX-FAN Appendix Disk etc.)
+ (taken from FreeMSX/FreeM)
+ https://web.archive.org/web/20030702070532/http://nemoto.tri6.net/download/freemsx.html
+ Now ZEXALL test all OK.
+
+-Improve transparent color of sprites(Shin Maou Golvellius(Golvellius 2) etc).
+
+-Improve VDP emulation with 128KB VRAM to manage as 2 x 64KB not one block of 128KB.
+ This fixes graphic glitches of many games.(F-1 Spirits 3D Special, Laydock2(intro), Breakers, 
+ Feedback(intro) etc.)
+
+-Improve Screen 8 sprite coolors(Ikari Warrior, Rick & Mick's Adventure etc)
+
+-Support many MegaROM Mapper such as R-Type, many kinds of KOEI games
+ (Sangokushi(Romance of the Three Kingdoms) series, Nobunaga no yabou(Nobunaga's Ambition) series, 
+ Genghis Khan series etc), Wizardry, Manbow2, Super Lode Runner, Wing Warriors(2021 version) etc.
+
+-Improve MegaROM Mapper such as Hole In One Special(ASCII16) etc.
+
+-Improve MegaROM detection and add ability to load ROM database "CARTS32.CSV" of msxDS.
+ http://msxds.msxblue.com/
+
+-Improve Japanese keyboard input. fMSX3DS supports every Keys of Japanese keyboard.
+
+-Add supprt for 2nd level kanji in Kanji ROM. 
+
+-Support zip compressed files with multiple disk/ROM in the one zip file. and support 2byte charactor
+filename like Japanese.
+
+-Support mouse emulaton and Arkanoid Paddle/ Paddle device emulation with touch screen for 3DS.
+
+-Added the Software Keyboard with the touch screen for 3DS.
+
+-Show graph characters in the Software Keyboard when you press graph key.
+
+-Add ability to show the reference image in the bottom screen of 3DS.
+
+-Support homebrew ROM cartridges that has too small or uncommon ROM size. 
+
+-Add ability to insert FM-PAC ROM cartridge in SLOT-2 automatelly when you play R-Type.
+
+-Add ability to change memory Slot automatelly when you play YAKSA to get rid of bugs. 
