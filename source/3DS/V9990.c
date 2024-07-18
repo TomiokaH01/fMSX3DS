@@ -27,6 +27,7 @@
 #define VDP_VRMP_512(X, Y) (V9KVRAM + (((Y<<8) + (X>>1))&0x7FFFF))
 #define VDP_VRMP_1024(X, Y) (V9KVRAM + (((Y<<9) + (X>>1))&0x7FFFF))
 #define VDP_VRMP_BPP8(X, Y) (V9KVRAM + (((Y<<8) + X)&0x7FFFF))
+#define VDP_VRMP_BPP8_512(X, Y) (V9KVRAM + (((Y<<9) + X)&0x7FFFF))
 
 #define VDP_VRMP(M, X, Y) VDPVRMP(M, X, Y)
 #define VDP_POINT(M, X, Y) VDPpoint(M, X, Y)
@@ -130,8 +131,9 @@ static struct {
 static byte VDPpointBP4(register int SX, register int SY);
 static byte VDPpoint512(register int SX, register int SY);
 static byte VDPpoint1024(register int SX, register int SY);
-static word VDPpointBD16(int SX, int SY);
-static word VDPpointBD16_512(int SX, int SY);
+static word VDPpointBD16(register int SX, register int SY);
+static word VDPpointBD16_512(register int SX, register int SY);
+
 static void V9Kpsetlowlevel(register byte* P, register byte CL,
     register byte M, register byte OP);
 
@@ -150,6 +152,8 @@ static void VDPpset16BP4(register int DX, register int DY,
 static void VDPpset16BP4_512(register int DX, register int DY,
     register int SX, register word CW, register byte OP);
 static void VDPpset16BP4_1024(register int DX, register int DY,
+    register int SX, register word CW, register byte OP);
+static void VDPpset16BP6(register int DX, register int DY,
     register int SX, register word CW, register byte OP);
 
 static void LmmcEngineV9990(void);
@@ -370,6 +374,15 @@ INLINE void VDPpset16BP6(int DX, int DY, int SX, word CW, byte OP)
     //register byte DH = ((~DX) & 1) << 3;
 
     V9Kpsetlowlevel(VDP_VRMP_BPP8(DX, DY),
+        (CW >> SH) & 255, ~255, OP);
+}
+
+INLINE void VDPpset16BP6_512(int DX, int DY, int SX, word CW, byte OP)
+{
+    register byte SH = ((~SX) & 1) << 3;
+    //register byte DH = ((~DX) & 1) << 3;
+
+    V9Kpsetlowlevel(VDP_VRMP_BPP8_512(DX, DY),
         (CW >> SH) & 255, ~255, OP);
 }
 
@@ -608,6 +621,10 @@ void LmmcEngineV9990(void)
                 case 1:
                     VDPpset16BP4_512(MMCV9990.ADX, DY, MMCV9990.ASX, V9990Port[2] | (V9990Port[2] << 8), MMCV9990.LO);
                     break;
+                case 2:
+                    VDPpset16BP6_512(MMCV9990.ADX, DY, MMCV9990.ASX, V9990Port[2] | (V9990Port[2] << 8), MMCV9990.LO);
+                    i++;
+                    break;
                 case 3:
                     VDPpsetBD16_512(MMCV9990.ADX, DY, V9990Port[2] | (V9990PrevData << 8), MMCV9990.LO);
                     V9990PrevData = -1;
@@ -697,12 +714,26 @@ void LmmvEngineV9990(void)
         case 256:
             switch (V9KImgHeight)
             {
-            case 2048:  /* P1 Mode */
-                #define DOCMD(N)     pre_loop VDPpset16BP4(ADX, DY, ADX ,FC, N); post__x_y_g9k(256,2048) break;
+            case 1024:  /* BD16 */
+                #define DOCMD(N)     pre_loop VDPpsetBD16(ADX, DY, FC, N); post__x_y_g9k(256,2048) break;
                 SWITCHCMD
                 #undef DOCMD
                 break;
-            case 4096:
+            case 2048:  /* P1 Mode or BP6 or BD8 */
+                if (!V9KScrMode)
+                {
+                    #define DOCMD(N)     pre_loop VDPpset16BP4(ADX, DY, ADX ,FC, N); post__x_y_g9k(256,2048) break;
+                    SWITCHCMD
+                    #undef DOCMD
+                }
+                else
+                {
+                    #define DOCMD(N)     pre_loop VDPpset16BP6(ADX, DY, ADX ,FC, N); post__x_y_g9k(256,2048) break;
+                    SWITCHCMD
+                    #undef DOCMD
+                }
+                break;
+            case 4096:  /* BP4 */
                 #define DOCMD(N)     pre_loop VDPpset16BP4(ADX, DY, ADX, FC, N); post__x_y_g9k(256,4096) break;
                 SWITCHCMD
                 #undef DOCMD
@@ -722,7 +753,12 @@ void LmmvEngineV9990(void)
                 SWITCHCMD
                 #undef DOCMD
                 break;
-            case 2048:
+            case 1024:  /* BP6 or BD8(BytePerPixel 8) */
+                #define DOCMD(N)     pre_loop VDPpset16BP6_512(ADX, DY, ADX ,FC, N); post__x_y_g9k(512,1024) break;
+                SWITCHCMD
+                #undef DOCMD
+                break;
+            case 2048:  /* P2 Mode or BP4*/
                 #define DOCMD(N)     pre_loop VDPpset16BP4_512(ADX, DY, ADX, FC, N); post__x_y_g9k(512,2048) break;
                 SWITCHCMD
                 #undef DOCMD
@@ -835,6 +871,10 @@ void LmcmEngineV9990(void)
                     if (i == 0)V9990Port[2] = (V9990Port[2] & 0x0F) | (VDPpoint512(MMCV9990.ASX, MMCV9990.SY | SYOff) << 4);
                     else V9990Port[2] = (V9990Port[2] & 0xF0) | VDPpoint512(MMCV9990.ASX, MMCV9990.SY | SYOff);
                     break;
+                case 2:
+                    V9990Port[2] |= *VDP_VRMP_BPP8_512(MMCV9990.ASX, MMCV9990.SY);
+                    i++;
+                    break;
                 case 3:
                     V9990Port[2] |= ((*V9KVRAM + (((MMCV9990.SY << 10) + (MMCV9990.ASX << 1)) & 0x7FFFF)) << 8) |
                         (*V9KVRAM + (((MMCV9990.SY << 10) + (MMCV9990.ASX << 1) + 1) & 0x7FFFF));
@@ -922,9 +962,15 @@ void LmmmEngineV9990(void)
                 #undef DOCMD
                 break;
             case 2048:
-                if (!V9KScrMode)    /* P1 Mode */
+                if (!V9KScrMode)    /* P1 Mode or BP6 or BD8 */
                 {
                     #define DOCMD(N)     pre_loop VDPpsetBP4(ADX, DY, VDPpointBP4(ASX, SY), N); post_xxyy_g9k(256,2048) break;
+                    SWITCHCMD
+                    #undef DOCMD
+                }
+                else
+                {
+                    #define DOCMD(N)     pre_loop V9Kpsetlowlevel(VDP_VRMP_BPP8(ADX, DY), *VDP_VRMP_BPP8(ASX, SY), 0x00, N); post_xxyy_g9k(256,2048) break;
                     SWITCHCMD
                     #undef DOCMD
                 }
@@ -946,6 +992,11 @@ void LmmmEngineV9990(void)
             {
                 case 512:   /* BD16(16BytePerPixel) */
                     #define DOCMD(N)     pre_loop VDPpsetBD16_512(ADX, DY, VDPpointBD16_512(ASX, SY), N); post_xxyy_g9k(512,512) break;
+                    SWITCHCMD
+                    #undef DOCMD
+                    break;
+                case 1024:  /* BP8 or BD16 */
+                    #define DOCMD(N)     pre_loop V9Kpsetlowlevel(VDP_VRMP_BPP8_512(ADX, DY), *VDP_VRMP_BPP8_512(ASX, SY), 0x00, N); post_xxyy_g9k(512,1024) break;
                     SWITCHCMD
                     #undef DOCMD
                     break;
@@ -1042,10 +1093,14 @@ void CmmcEngineV9990(void)
             case 256:
                 switch (V9KImgHeight)
                 {
-                case 2048:  /* P1 Mode */
-                    VDPpset16BP4(ADX, DY, ADX ,SC, LO);
+                case 1024:  /* BD16 */
+                    VDPpsetBD16(ADX, DY, SC, LO);
                     break;
-                case 4096:
+                case 2048:  /* P1 Mode or BP6 or BD8 */
+                    if(!V9KScrMode)VDPpset16BP4(ADX, DY, ADX ,SC, LO);
+                    else VDPpset16BP6(ADX, DY, ADX, SC, LO);
+                    break;
+                case 4096:  /* BP4 */
                     VDPpset16BP4(ADX, DY, ADX, SC, LO);
                     break;
                 default:
@@ -1056,10 +1111,13 @@ void CmmcEngineV9990(void)
             case 512:
                 switch (V9KImgHeight)
                 {
-                case 512:       /* BD16(BytePerPixel 16) */
+                case 512:   /* BD16(BytePerPixel 16) */
                     VDPpsetBD16_512(ADX, DY, SC, LO);
                     break;
-                case 2048:
+                case 1024:  /* BP6 or BD8 */
+                    VDPpset16BP6_512(ADX, DY, ADX, SC, LO);
+                    break;
+                case 2048:  /* P2 Mode or BP4 */
                     VDPpset16BP4_512(ADX, DY, ADX, SC, LO);
                     break;
                 default:
@@ -1144,12 +1202,26 @@ void CmmmEngineV9990(void)
     case 256:
         switch (V9KImgHeight)
         {
-        case 2048:  /* P1 Mode */
-            #define DOCMD(N)     pre_loop exec_cmmm VDPpset16BP4(ADX, DY, ADX ,SC, N); post__x_y_g9k(256,2048) break;
+        case 1024:
+            #define DOCMD(N)     pre_loop exec_cmmm VDPpsetBD16(ADX, DY, SC, N); post__x_y_g9k(256,1024) break;
             SWITCHCMD
             #undef DOCMD
             break;
-        case 4096:
+        case 2048:  /* P1 Mode or BP6 */
+            if (!V9KScrMode)
+            {
+                #define DOCMD(N)     pre_loop exec_cmmm VDPpset16BP4(ADX, DY, ADX ,SC, N); post__x_y_g9k(256,2048) break;
+                SWITCHCMD
+                #undef DOCMD
+            }
+            else
+            {
+                #define DOCMD(N)     pre_loop exec_cmmm VDPpset16BP6(ADX, DY, ADX ,SC, N); post__x_y_g9k(256,2048) break;
+                SWITCHCMD
+                #undef DOCMD
+            }
+            break;
+        case 4096:  /* BP4 */
             #define DOCMD(N)     pre_loop exec_cmmm VDPpset16BP4(ADX, DY, ADX, SC, N); post__x_y_g9k(256,4096) break;
             SWITCHCMD
             #undef DOCMD
@@ -1164,12 +1236,17 @@ void CmmmEngineV9990(void)
     case 512:
         switch (V9KImgHeight)
         {
-        case 512:       /* BD16(BytePerPixel 16) */
+        case 512:   /* BD16(BytePerPixel 16) */
             #define DOCMD(N)     pre_loop exec_cmmm VDPpsetBD16_512(ADX, DY, SC, N); post__x_y_g9k(512,512) break;
             SWITCHCMD
             #undef DOCMD
             break;
-        case 2048:
+        case 1024:  /* BP6 or BD8 */
+            #define DOCMD(N)     pre_loop exec_cmmm VDPpset16BP6_512(ADX, DY, ADX, SC, N); post__x_y_g9k(512,512) break;
+            SWITCHCMD
+            #undef DOCMD
+            break;
+        case 2048:  /* P2 Mode or BP4 */
             #define DOCMD(N)     pre_loop exec_cmmm VDPpset16BP4_512(ADX, DY, ADX, SC, N); post__x_y_g9k(512,2048) break;
             SWITCHCMD
             #undef DOCMD
@@ -1256,10 +1333,24 @@ void BmxlEngineV9990(void)
     case 256:
         switch (V9KImgHeight)
         {
-        case 2048:  /* P1 Mode */
-            #define DOCMD(N)     pre_loop exec_bmxl VDPpset16BP4(ADX, DY, ADX ,SC, N); post__x_y_g9k(256,2048) break;
+        case 1024:  /* BD16 */
+            #define DOCMD(N)     pre_loop exec_bmxl VDPpsetBD16(ADX, DY,SC, N); post__x_y_g9k(256,1024) break;
             SWITCHCMD
             #undef DOCMD
+            break;
+        case 2048:  /* P1 Mode or BP6 or BD8 */
+            if (!V9KScrMode)
+            {
+                #define DOCMD(N)     pre_loop exec_bmxl VDPpset16BP4(ADX, DY, ADX ,SC, N); post__x_y_g9k(256,2048) break;
+                SWITCHCMD
+                #undef DOCMD
+            }
+            else
+            {
+                #define DOCMD(N)     pre_loop exec_bmxl VDPpset16BP6(ADX, DY, ADX ,SC, N); post__x_y_g9k(256,2048) break;
+                SWITCHCMD
+                #undef DOCMD
+            }
             break;
         case 4096:
             #define DOCMD(N)     pre_loop exec_bmxl VDPpset16BP4(ADX, DY, ADX, SC, N); post__x_y_g9k(256,4096) break;
@@ -1281,7 +1372,12 @@ void BmxlEngineV9990(void)
             SWITCHCMD
             #undef DOCMD
             break;
-        case 2048:
+        case 1024:
+            #define DOCMD(N)     pre_loop exec_bmxl VDPpset16BP6_512(ADX, DY, ADX, SC, N); post__x_y_g9k(512,1024) break;
+            SWITCHCMD
+            #undef DOCMD
+            break;
+        case 2048:  /* P2 Mode or BP4 */
             #define DOCMD(N)     pre_loop exec_bmxl VDPpset16BP4_512(ADX, DY, ADX, SC, N); post__x_y_g9k(512,2048) break;
             SWITCHCMD
             #undef DOCMD
@@ -1363,31 +1459,50 @@ void BmlxEngineV9990(void)
     case 256:
         switch (V9KImgHeight)
         {
-        case 2048:  /* P1 Mode */
-            #define DOCMD(N)     pre_loop exec_bmlx  VDPPSetLXBP4(DA, DX, ASX, SY, LO); post__x_ys_g9k(256,2048) break;
+        case 1024:  /* BD16 */
+            #define DOCMD(N)     pre_loop exec_bmlx  VDPPSetLXBD16(DA, ASX, SY, LO); post__x_ys_g9k(256,1024) break;
             SWITCHCMD
             #undef DOCMD
-                break;
+            break;
+        case 2048:  /* P1 Mode or BP6 or BD8 */
+            if (!V9KScrMode)
+            {
+                #define DOCMD(N)     pre_loop exec_bmlx  VDPPSetLXBP4(DA, DX, ASX, SY, LO); post__x_ys_g9k(256,2048) break;
+                SWITCHCMD
+                #undef DOCMD
+            }
+            else
+            {
+                #define DOCMD(N)     pre_loop exec_bmlx  VDPPSetLXBP6(DA, ASX, SY, LO); post__x_ys_g9k(256,2048) break;
+                SWITCHCMD
+                #undef DOCMD
+            }
+            break;
         case 4096:  /* BP4 */
             #define DOCMD(N)     pre_loop exec_bmlx  VDPPSetLXBP4(DA, DX, ASX, SY, LO); post__x_ys_g9k(256,4096) break;
             SWITCHCMD
             #undef DOCMD
-                break;
+            break;
         default:
             #define DOCMD(N)     pre_loop exec_bmlx  VDPPSetLXBP4(DA, DX, ASX, SY, LO); post__x_ys_g9k(256,4096) break;
             SWITCHCMD
             #undef DOCMD
-                break;
+            break;
         }
         break;
     case 512:
         switch (V9KImgHeight)
         {
-        case 512:       /* BD16(BytePerPixel 16) */
+        case 512:   /* BD16(BytePerPixel 16) */
             #define DOCMD(N)     pre_loop exec_bmlx VDPPSetLXBD16_512(DA, ASX, SY, LO); post__x_ys_g9k(512,512) break;
             SWITCHCMD
             #undef DOCMD
                 break;
+        case 1024:  /* BP6 or BD8 */
+            #define DOCMD(N)     pre_loop exec_bmlx VDPPSetLXBP6_512(DA, ASX, SY, LO);  post__x_ys_g9k(512,1024) break;
+            SWITCHCMD
+            #undef DOCMD
+            break;
         case 2048:  /* P2 Mode or BP4*/
             #define DOCMD(N)     pre_loop exec_bmlx  VDPPsetLXBP4_512(DA, DX, ASX, SY, LO);  post__x_ys_g9k(512,2048) break;
             SWITCHCMD
@@ -1574,10 +1689,19 @@ void LineEngineV9990(void)
                 SWITCHCMD
                 #undef DOCMD
                 break;
-            case 2048:  /* P1 Mode */
-                #define DOCMD(N)    pre_loop VDPpsetBP4(DX, DY, FC, N); post_linexmaj_v9k(256,2048) break;
-                SWITCHCMD
-                #undef DOCMD
+            case 2048:  /* P1 Mode or BP6 or BD8 */
+                if (!V9KScrMode)
+                {
+                    #define DOCMD(N)    pre_loop VDPpsetBP4(DX, DY, FC, N); post_linexmaj_v9k(256,2048) break;
+                    SWITCHCMD
+                    #undef DOCMD
+                }
+                else
+                {
+                    #define DOCMD(N)    pre_loop V9Kpsetlowlevel(VDP_VRMP_BPP8(DX,DY), FC, 0x00, N); post_linexmaj_v9k(256,2048) break;
+                    SWITCHCMD
+                    #undef DOCMD
+                }
                 break;
             case 4096:  /* BP4 */
                 #define DOCMD(N)    pre_loop VDPpsetBP4(DX, DY, FC, N); post_linexmaj_v9k(256,4096) break;
@@ -1596,6 +1720,11 @@ void LineEngineV9990(void)
             {
             case 512:   /* BD16(16BytePerPixel) */
                 #define DOCMD(N)    pre_loop VDPpsetBD16_512(DX, DY, FC, N); post_linexmaj_v9k(512,512) break;
+                SWITCHCMD
+                #undef DOCMD
+                break;
+            case 1024:  /* BP6 */
+                #define DOCMD(N)    pre_loop V9Kpsetlowlevel(VDP_VRMP_BPP8(DX,DY), FC, 0x00, N); post_linexmaj_v9k(512,1024) break;
                 SWITCHCMD
                 #undef DOCMD
                 break;
@@ -1622,10 +1751,24 @@ void LineEngineV9990(void)
         case 256:
             switch (V9KImgHeight)
             {
-            case 2048:  /* P1 Mode */
-                #define DOCMD(N)    pre_loop VDPpsetBP4(DX, DY, FC, N); post_lineymaj_v9k(256,2048) break;
+            case 1024:  /* BD16 */
+                #define DOCMD(N)    pre_loop VDPpsetBD16(DX, DY, FC, N); post_lineymaj_v9k(256,1024) break;
                 SWITCHCMD
                 #undef DOCMD
+                break;
+            case 2048:  /* P1 Mode or BP6 or BD8*/
+                if (!V9KScrMode)
+                {
+                    #define DOCMD(N)    pre_loop VDPpsetBP4(DX, DY, FC, N); post_lineymaj_v9k(256,2048) break;
+                    SWITCHCMD
+                    #undef DOCMD
+                }
+                else
+                {
+                    #define DOCMD(N)    pre_loop V9Kpsetlowlevel(VDP_VRMP_BPP8(DX,DY), FC, 0xFF, N); post_lineymaj_v9k(256,2048) break;
+                    SWITCHCMD
+                    #undef DOCMD
+                }
                 break;
             case 4096:  /* BP4 */
                 #define DOCMD(N)    pre_loop VDPpsetBP4(DX, DY, FC, N); post_lineymaj_v9k(256,4096) break;
@@ -1644,6 +1787,11 @@ void LineEngineV9990(void)
             {
             case 512:   /* BD16(16BytePerPixel) */
                 #define DOCMD(N)    pre_loop VDPpsetBD16_512(DX, DY, FC, N); post_lineymaj_v9k(512, 512) break;
+                SWITCHCMD
+                #undef DOCMD
+                break;
+            case 1024:  /* BP6 or BD8 */
+                #define DOCMD(N)    pre_loop V9Kpsetlowlevel(VDP_VRMP_BPP8_512(DX,DY), FC, 0x00, N); post_lineymaj_v9k(512,1024) break;
                 SWITCHCMD
                 #undef DOCMD
                 break;
@@ -1720,9 +1868,19 @@ void SrchEngineV9990(void)
     case 256:
         switch (V9KImgHeight)
         {
-        case 2048:  /* P1 Mode */
+        case 1024:  /* BD16 */
+            pre_srch_v9k VDPpointBD16(SX, SY) post_srch_v9k(256)
+            break;
+        case 2048:  /* P1 Mode or BP6 or BD8 */
         case 4096:  /* BP4 */
-            pre_srch_v9k VDPpointBP4(SX, SY) post_srch_v9k(256)
+            if (V9KPixelRes == 2)
+            {
+                pre_srch_v9k VDP_VRMP_BPP8(SX, SY) post_srch_v9k(256)
+            }
+            else
+            {
+                pre_srch_v9k VDPpointBP4(SX, SY) post_srch_v9k(256)
+            }
             break;
         default:
             pre_srch_v9k VDPpointBP4(SX, SY) post_srch_v9k(256)
@@ -1733,7 +1891,10 @@ void SrchEngineV9990(void)
         switch (V9KImgHeight)
         {
         case 512:   /* BD16(16BytePerPixel) */
-            pre_srch_v9k VDPpointBD16(SX, SY) post_srch_v9k(512)
+            pre_srch_v9k VDPpointBD16_512(SX, SY) post_srch_v9k(512)
+            break;
+        case 1024:  /* BP6 or BD8 */
+            pre_srch_v9k VDP_VRMP_BPP8_512(SX, SY) post_srch_v9k(512)
             break;
         case 2048:  /* BP4 */
             pre_srch_v9k VDPpoint512(SX, SY) post_srch_v9k(512)
@@ -1821,6 +1982,10 @@ void PointEngineV9990(void)
                     if (i == 0)V9990Port[2] = (V9990Port[2] & 0x0F) | (VDPpoint512(MMCV9990.ASX, MMCV9990.SY | SYOff) << 4);
                     else V9990Port[2] = (V9990Port[2] & 0xF0) | VDPpoint512(MMCV9990.ASX, MMCV9990.SY | SYOff);
                     break;
+                case 2:
+                    V9990Port[2] |= *VDP_VRMP_BPP8_512(MMCV9990.ASX, MMCV9990.SY);
+                    i++;
+                    break;
                 case 3:
                     //POINTData |= ((*V9KVRAM + (((MMCV9990.SY << 10) + (MMCV9990.ASX << 1)) & 0x7FFFF)) << 8) |
                     //    (*V9KVRAM + (((MMCV9990.SY << 10) + (MMCV9990.ASX << 1) + 1) & 0x7FFFF));
@@ -1863,9 +2028,13 @@ void PsetEngineV9990(void)
     case 256:
         switch (V9KImgHeight)
         {
-        case 2048:  /* P1 Mode */
+        case 1024:  /* BD16 */
+            VDPpsetBD16(MMCV9990.DX, MMCV9990.DY, FC, LO);
+            break;
+        case 2048:  /* P1 Mode or BP6 or BD8*/
         case 4096:  /* BP4 */
-            VDPpsetBP4(MMCV9990.DX, MMCV9990.DY, FC, LO);
+            if (V9KPixelRes == 2)V9Kpsetlowlevel(VDP_VRMP_BPP8(MMCV9990.DX, MMCV9990.DY), FC, 0xFF, LO);
+            else  VDPpsetBP4(MMCV9990.DX, MMCV9990.DY, FC, LO);
             break;
         default:
             VDPpsetBP4(MMCV9990.DX, MMCV9990.DY, FC, LO);
@@ -1876,7 +2045,10 @@ void PsetEngineV9990(void)
         switch (V9KImgHeight)
         {
         case 512:   /* BD16(16BytePerPixel) */
-            VDPpsetBD16(MMCV9990.DX, MMCV9990.DY, FC, LO);
+            VDPpsetBD16_512(MMCV9990.DX, MMCV9990.DY, FC, LO);
+            break;
+        case 1024:
+            V9Kpsetlowlevel(VDP_VRMP_BPP8_512(MMCV9990.DX, MMCV9990.DY), FC, 0xFF, LO);
             break;
         case 2048:  /* BP4 */
             VDPpsetBP4_512(MMCV9990.DX, MMCV9990.DY, FC, LO);
