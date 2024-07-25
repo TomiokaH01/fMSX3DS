@@ -155,6 +155,24 @@ static void VDPpset16BP4_1024(register int DX, register int DY,
     register int SX, register word CW, register byte OP);
 static void VDPpset16BP6(register int DX, register int DY,
     register int SX, register word CW, register byte OP);
+static void VDPpset16BP6_512(register int DX, register int DY,
+    register int SX, register word CW, register byte OP);
+static void VDPPSetLXBP4(register int DA, register int DX,
+    register int SX, register int SY, register byte OP);
+static void VDPPsetLXBP4_512(register int DA, register int DX,
+    register int SX, register int SY, register byte OP);
+static void VDPPsetLXBP4_1024(register int DA, register int DX,
+    register int SX, register int SY, register byte OP);
+static void VDPPSetLXBP6(register int DA, register int SX,
+    register int SY, register byte OP);
+static void VDPPSetLXBP6_512(register int DA, register int SX,
+    register int SY, register byte OP);
+static void VDPPSetLXBD16(register int DA, register int SX,
+    register int SY, register byte OP);
+static void VDPPSetLXBD16_512(register int DA, register int SX,
+    register int SY, register byte OP);
+
+static int GetVdpTimingValue(register int* timing_values);
 
 static void LmmcEngineV9990(void);
 static void LmmvEngineV9990(void);
@@ -178,6 +196,32 @@ static int  VdpOpsCntV9990 = 1;
 static int V9990PrevData = -1;
 static void (*VdpEngineV9990)(void) = 0;
 
+                         /*  SprOn SprOn SprOf SprOf */
+                         /*  ScrOf ScrOn ScrOf ScrOn */
+static int lmmv_timing[16] = {  54, 127,  54,  97,     /* P1 Mode */
+                                40,  84,  40,  66,     /* P2 Mode */
+                                40,  42,  40,  40,     /* BitMap Mode */
+                                60,  67,  60,  60 };   /* BitMap Mode OverScan */
+
+static int lmmm_timing[16] = { 114, 265, 204, 114,
+                                57, 132, 101,  57,
+                                55,  60,  56,  55,
+                                85,  99,  87,  85 };
+
+static int bmll_timing[16] = { 114, 268, 206, 114,
+                               114, 268, 206, 114,
+                               110, 120, 113, 110,
+                               172, 198, 177, 172 };
+
+static int bmxl_timing[16] = {  93, 212, 164,  93,
+                                57, 268, 101,  57,
+                                55,  59,  56,  55,
+                                85,  98,  87,  85 };
+
+static int bmlx_timing[16] = { 109, 235, 184, 109,
+                                57, 220, 101,  57,
+                                55,  60,  56,  55,
+                                85,  99,  87,  85 };
 
 /** VDPpointBP4 **********************************************/
 /** Get a pixel on BP4 Mode                                 **/
@@ -443,8 +487,26 @@ INLINE void VDPPSetLXBD16_512(int DA, int SX, int SY, byte OP)
 /*************************************************************/
 static int GetVdpTimingValue(register int* timing_values)
 {
-    return(timing_values[((V9990VDP[8]>>6)&0x01) | ((V9990VDP[8]>>4)&0x02) | ((V9990VDP[7]>>1)&0x04)]);
+    int timeval = timing_values[((V9990VDP[8] >> 7) & 0x01) | ((V9990VDP[8] >> 5) & 0x02) | ((V9KScrMode < 2 ? V9KScrMode : (V9KScrMode & 0x01 ? 2 : 3)) << 2)];
+    switch (V9KPixelRes)
+    {
+    case 0:
+        timeval >>= 1;
+        break;
+    case 1:
+        break;
+    case 2:
+        //timeval <<= 1;
+        break;
+    case 3:
+        //timeval <<= 2;
+        break;
+    default:
+        break;
+    }
+    return (timeval);
 }
+
 
 /** VDPDraw() ************************************************/
 /** Perform a given V9938 operation Op.                     **/
@@ -550,6 +612,7 @@ byte VDPDrawV9990(byte Op)
 
     return 0;
 }
+
 
 void VDPReadV9990(void)
 {
@@ -692,8 +755,7 @@ void LmmvEngineV9990(void)
     register byte LO = MMCV9990.LO;
     register int cnt, FC;
     register int delta;
-    //delta = 60;
-    delta = 30;
+    delta = GetVdpTimingValue(lmmv_timing);
     cnt = VdpOpsCntV9990;
 
     if (V9KScrMode == 0)
@@ -948,7 +1010,7 @@ void LmmmEngineV9990(void)
     }
 
 
-    delta = 60;
+    delta = GetVdpTimingValue(lmmm_timing);
     cnt = VdpOpsCntV9990;
 
         switch (V9KImgWidth)
@@ -1187,7 +1249,7 @@ void CmmmEngineV9990(void)
     SC = (RectData>>(7-RectPos))&0x01 ? FC : BC; \
     RectPos = (RectPos+1)&0x07;
 
-    delta = 60;
+    delta = GetVdpTimingValue(bmxl_timing);
     cnt = VdpOpsCntV9990;
 
     if (V9KScrMode == 0)
@@ -1321,11 +1383,11 @@ void BmxlEngineV9990(void)
     RectPos = (RectPos+(2<<V9KPixelRes))&0x07;
 
 #define exec_bmxl_bd16    \
-    if(!RectPos) { SC = (V9KVRAM[SA+1]<<8) | V9KVRAM[SA]; \
+    if(!RectPos) { SC = (V9KVRAM[SA]<<8) | V9KVRAM[SA+1]; \
     SA = (SA +2)&0x7FFFF;}   \
-    RectPos = (RectPos+(2<<V9KPixelRes))&0x07;
+    RectPos = (RectPos+(2<<V9KPixelRes))&0x07;  \
 
-    delta = 60;
+    delta = GetVdpTimingValue(bmxl_timing);
     cnt = VdpOpsCntV9990;
 
     switch (V9KImgWidth)
@@ -1334,7 +1396,7 @@ void BmxlEngineV9990(void)
         switch (V9KImgHeight)
         {
         case 1024:  /* BD16 */
-            #define DOCMD(N)     pre_loop exec_bmxl VDPpsetBD16(ADX, DY,SC, N); post__x_y_g9k(256,1024) break;
+            #define DOCMD(N)     pre_loop  exec_bmxl_bd16 VDPpsetBD16(ADX, DY,SC, N); post__x_y_g9k(256,1024) break;
             SWITCHCMD
             #undef DOCMD
             break;
@@ -1451,7 +1513,7 @@ void BmlxEngineV9990(void)
     RectPos = RectPos+(2<<V9KPixelRes); \
     DA = DA + RectPos>>3;
 
-    delta = 60;
+    delta = GetVdpTimingValue(bmlx_timing);
     cnt = VdpOpsCntV9990;
 
     switch (V9KImgWidth)
@@ -1564,7 +1626,7 @@ void BmllEngineV9990(void)
     register int cnt;
     register int delta;
 
-    delta = 60;
+    delta = GetVdpTimingValue(bmll_timing);
     cnt = VdpOpsCntV9990;
 
     if (!V9KScrMode)
@@ -1655,7 +1717,7 @@ void LineEngineV9990(void)
 
 #define post_linexmaj_v9k(MX, MY) \
     DX+=TX; \
-    if (MI>0) { \
+    if (MI<MJ) { \
     ADX += MI;  \
     if((ADX<<1)>=MJ){DY +=TY; ADX -= MJ;} \
     }   \
@@ -1664,7 +1726,7 @@ void LineEngineV9990(void)
     }
 #define post_lineymaj_v9k(MX, MY) \
     DY += TY; \
-    if (MI>0) { \
+    if (MI<MJ) { \
     ADX += MI; \
     if((ADX<<1)>=MJ){DX +=TX; ADX -= MJ;}   \
     }   \
@@ -1672,7 +1734,7 @@ void LineEngineV9990(void)
         break; \
     }
 
-    delta = 60;
+    delta = GetVdpTimingValue(lmmv_timing);
     cnt = VdpOpsCntV9990;
 
     //FC = V9990VDP[48] << 8 | V9990VDP[49];
@@ -1839,10 +1901,10 @@ void SrchEngineV9990(void)
 
 #define pre_srch_v9k \
     pre_loop \
-      if (
+      if ((
 
 #define post_srch_v9k(MX) \
-           ==((FC>>(((~SX)&0x01)<<2))&0x0F)^NEQ) { \
+           ==((FC>>(((~SX)&0x01)<<2))&0x0F))^NEQ) { \
       V9990Port[5] |=0x10; /* Border detected */ \
       break; \
     } \
@@ -1853,12 +1915,26 @@ void SrchEngineV9990(void)
     } \
   }
 
-    delta = 60;
+#define pre_srch_v9k_bd16 \
+    pre_loop \
+      if ((
+
+#define post_srch_v9k_bd16(MX) \
+           ==FC)^NEQ) { \
+      V9990Port[5] |=0x10; /* Border detected */ \
+      break; \
+    } \
+    SX = SX+TX; \
+    if ((SX & MX) || (SX==-1)) { \
+      V9990Port[5] &= 0xEF; /* Border not detected */ \
+      break; \
+    } \
+  }
+
+    delta = GetVdpTimingValue(lmmv_timing);
     cnt = VdpOpsCntV9990;
 
-    NEQ = (V9990VDP[44] & 0x02) != 2;
-
-    //NEQ = V9990VDP[44] & 0x02 ? 0 : 1;
+    NEQ = (V9990VDP[44] & 0x02) != 0;
 
     FC = !V9KScrMode ? (V9990VDP[37] & 0x02 ? ((V9990VDP[49] << 8) | V9990VDP[49]) : ((V9990VDP[48] << 8) | V9990VDP[48])) : (V9990VDP[48] << 8) | V9990VDP[49];
     //FC = V9990VDP[48] << 8 | V9990VDP[49];
@@ -1869,7 +1945,7 @@ void SrchEngineV9990(void)
         switch (V9KImgHeight)
         {
         case 1024:  /* BD16 */
-            pre_srch_v9k VDPpointBD16(SX, SY) post_srch_v9k(256)
+            pre_srch_v9k VDPpointBD16(SX, SY) post_srch_v9k_bd16(256)
             break;
         case 2048:  /* P1 Mode or BP6 or BD8 */
         case 4096:  /* BP4 */
@@ -1891,7 +1967,7 @@ void SrchEngineV9990(void)
         switch (V9KImgHeight)
         {
         case 512:   /* BD16(16BytePerPixel) */
-            pre_srch_v9k VDPpointBD16_512(SX, SY) post_srch_v9k(512)
+            pre_srch_v9k VDPpointBD16_512(SX, SY) post_srch_v9k_bd16(512)
             break;
         case 1024:  /* BP6 or BD8 */
             pre_srch_v9k VDP_VRMP_BPP8_512(SX, SY) post_srch_v9k(512)
@@ -1958,19 +2034,17 @@ void PointEngineV9990(void)
                     else V9990Port[2] = (V9990Port[2] & 0xF0) | VDPpointBP4(MMCV9990.ASX, MMCV9990.SY | SYOff);
                     break;
                 case 2:
-                    //POINTData |= *VDP_VRMP_BPP8(MMCV9990.ASX, MMCV9990.SY);
                     V9990Port[2] |= *VDP_VRMP_BPP8(MMCV9990.ASX, MMCV9990.SY);
                     i++;
                     break;
                 case 3:
-                    // POINTData |= ((*V9KVRAM + (((MMCV9990.SY << 9) + (MMCV9990.ASX << 1)) & 0x7FFFF)) << 8) |
-                    //     (*V9KVRAM + (((MMCV9990.SY << 9) + (MMCV9990.ASX << 1) + 1) & 0x7FFFF));
                     V9990Port[2] |= ((*V9KVRAM + (((MMCV9990.SY << 9) + (MMCV9990.ASX << 1)) & 0x7FFFF)) << 8) |
                         (*V9KVRAM + (((MMCV9990.SY << 9) + (MMCV9990.ASX << 1) + 1) & 0x7FFFF));
                     i++;
                     break;
                 default:
-                    POINTData |= VDPpointBP4(MMCV9990.ASX, MMCV9990.SY);
+                    if (i == 0)V9990Port[2] = (V9990Port[2] & 0x0F) | (VDPpointBP4(MMCV9990.ASX, MMCV9990.SY | SYOff) << 4);
+                    else V9990Port[2] = (V9990Port[2] & 0xF0) | VDPpointBP4(MMCV9990.ASX, MMCV9990.SY | SYOff);
                     break;
                 }
                 break;
@@ -1978,7 +2052,6 @@ void PointEngineV9990(void)
                 switch (V9KPixelRes)
                 {
                 case 1:
-                    //V9990Port[2] = V9990Port[2] & (0x0F << ((i & 0x01) << 2)) | VDPpoint512(MMCV9990.ASX, MMCV9990.SY);
                     if (i == 0)V9990Port[2] = (V9990Port[2] & 0x0F) | (VDPpoint512(MMCV9990.ASX, MMCV9990.SY | SYOff) << 4);
                     else V9990Port[2] = (V9990Port[2] & 0xF0) | VDPpoint512(MMCV9990.ASX, MMCV9990.SY | SYOff);
                     break;
@@ -1987,33 +2060,27 @@ void PointEngineV9990(void)
                     i++;
                     break;
                 case 3:
-                    //POINTData |= ((*V9KVRAM + (((MMCV9990.SY << 10) + (MMCV9990.ASX << 1)) & 0x7FFFF)) << 8) |
-                    //    (*V9KVRAM + (((MMCV9990.SY << 10) + (MMCV9990.ASX << 1) + 1) & 0x7FFFF));
                     V9990Port[2] |= ((*V9KVRAM + (((MMCV9990.SY << 10) + (MMCV9990.ASX << 1)) & 0x7FFFF)) << 8) |
                         (*V9KVRAM + (((MMCV9990.SY << 10) + (MMCV9990.ASX << 1) + 1) & 0x7FFFF));
                     i++;
                     break;
                 default:
-                    //POINTData |= VDPpoint512(MMCV9990.ASX, MMCV9990.SY);
                     if (i == 0)V9990Port[2] = (V9990Port[2] & 0x0F) | (VDPpoint512(MMCV9990.ASX, MMCV9990.SY | SYOff) << 4);
                     else V9990Port[2] = (V9990Port[2] & 0xF0) | VDPpoint512(MMCV9990.ASX, MMCV9990.SY | SYOff);
                     break;
                 }
                 break;
             case 1024:
-                //POINTData |= VDPpoint1024(MMCV9990.ASX, MMCV9990.SY);
                 V9990Port[2] |= VDPpoint1024(MMCV9990.ASX, MMCV9990.SY);
                 break;
             default:
                 break;
             }
-
-            V9990Port[5] |= 0x80;
+            V9990Port[5] &= 0x7F;
         }
     }
     /* Command execution done */
     V9990Port[5] &= 0xFE;
-    //V9990Port[2] = POINTData;
     VdpEngineV9990 = 0;
 }
 
@@ -2022,7 +2089,7 @@ void PsetEngineV9990(void)
 {
     register byte LO = MMCV9990.LO;
     register int FC = V9990VDP[48] << 8 | V9990VDP[49];
-    VdpOpsCntV9990 -= 60;
+    VdpOpsCntV9990 -= GetVdpTimingValue(lmmv_timing);
     switch (V9KImgWidth)
     {
     case 256:
@@ -2100,7 +2167,7 @@ void AdvnEngineV9990(void)
 {
     register byte LO = MMCV9990.LO;
     register int FC = V9990VDP[48] << 8 | V9990VDP[49];
-    VdpOpsCntV9990 -= 30;
+    VdpOpsCntV9990 -= GetVdpTimingValue(lmmv_timing);
     switch (V9990VDP[52] & 0x03)
     {
     case 1:
