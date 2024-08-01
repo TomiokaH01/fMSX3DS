@@ -8,6 +8,7 @@ extern "C" {
 
 //#include <string.h>
 #include <3ds.h>
+#include "3DSConfig.h"
 //#include <citro3d.h>
 extern touchPosition oldtp;
 extern touchPosition tp;
@@ -62,15 +63,18 @@ extern unsigned char* IPSPatchBuf;
 extern unsigned char ScreenFilter;
 extern unsigned char TurboNow;
 extern int fpsval;
+
 #ifdef USE_3D
 extern unsigned char OldStereo3DMode;
 extern unsigned char Stereo3DMode;
 extern unsigned char OldIs3DNow;
 extern unsigned char Is3DNow;
 #endif // USE_3D
+
 #ifdef TURBO_R
 extern unsigned char MSXDOS2Mapper;
 #endif // TURBO_R
+
 #ifdef _MSX0
 extern unsigned char UseMSX0;
 extern unsigned char LoadXBASIC;
@@ -78,10 +82,22 @@ extern unsigned char MSX0_I2CA;
 //extern unsigned char MSX0_GPIO;
 //extern unsigned char MSX0_UART;
 #endif // _MSX0
+
 #ifdef VDP_V9990
+extern unsigned char UseV9990;
 extern unsigned char V9990Active;
+extern unsigned char V9990Dual;
+extern int V9KcurrLine;
 #endif // VDP_V9990
 
+#ifdef USE_OVERCLOCK
+extern unsigned char overClockRatio;
+#endif // USE_OVERCLOCK
+
+
+#ifdef AUDIO_SYNC
+extern int audioCycleCnt;
+#endif // AUDIO_SYNC
 
 
 #define CART_NONE 0			/* No Specila Cartridge */
@@ -120,6 +136,7 @@ extern unsigned char UseRCFilter;
 extern unsigned char UseFIRFilter;
 extern unsigned char SoundSampRate;
 extern unsigned char Use8950TurboR;
+extern unsigned char ReadSCCPlus;
 #endif
 
 #ifdef DEBUG_LOG
@@ -218,6 +235,7 @@ FILE* sramfopen(const char* _name, const char* _mode);
 int CalcCRC32(void* Buf, const char* filePath, int Size);
 void CheckSpecialCart(void* Buf, int Size, int Type, int Slot);
 void LoadCartAtStart();
+void InitXbuf();
 void ShowMessage3DS(char* msg, char* msg2);
 void DoReloadFMPAC();
 int Debug_CalcBPalVlue(int R, int G, int B);
@@ -225,6 +243,7 @@ void Show_3DS_BreakPoint(const char* message);
 void Show_3DS_BreakPointVal(int val);
 void Show_3DS_BreakPointArg(const char* format, ...);
 void  SetupWideScreen(bool isWide);
+void WideScreenOn();
 void WideScreenOff();
 void SetScreenFilter(void);
 #ifdef __cplusplus
