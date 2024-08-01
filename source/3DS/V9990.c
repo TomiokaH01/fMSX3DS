@@ -583,8 +583,7 @@ byte VDPDrawV9990(byte Op)
         break;
     case CMV9990_LINE:
         MMCV9990.ADX = 0;
-        MMCV9990.ASX = MMCV9990.NX | (((unsigned int)V9990VDP[41] & 0x08) << 8);
-        //MMCV9990.ASX = (MMCV9990.NX - 1) >> 1;
+        MMCV9990.ASX = (MMCV9990.NX | (((unsigned int)V9990VDP[41] & 0x08) << 8))&(V9KImgWidth-1);
         VdpEngineV9990 = LineEngineV9990;
         break;
     case CMV9990_SRCH:
@@ -636,6 +635,10 @@ void VDPWriteV9990(register byte V)
                 V9990PrevData = V9990Port[2];
                 return;
             }
+        }
+        if (VdpEngineV9990 == CmmcEngineV9990)
+        {
+            V9990Port[5] |= 0x01;
         }
         V9990Port[2] = V;
         V9990Port[5] &= 0x7F;
@@ -1134,6 +1137,7 @@ void CmmcEngineV9990(void)
     register int NY = MMCV9990.NY;
     register int ADX = MMCV9990.ADX;
     register int ANX = MMCV9990.ANX;
+    register int DYOff = 0;
     register int RectPos = MMCV9990.RectPos;
     register byte LO = MMCV9990.LO;
     register byte RectData = MMCV9990.RectData;
@@ -1141,32 +1145,33 @@ void CmmcEngineV9990(void)
 
     if ((V9990Port[5] & 0x80) != 0x80)
     {
+        V9990Port[5] |= 0x80;
         if (V9KScrMode == 0)
         {
-            if (V9990VDP[37] & 0x02)DY |= 2048;
+            if (V9990VDP[37] & 0x02)DYOff = 2048;
         }
-        FC = (V9990VDP[48] << 8) | V9990VDP[49];
-        BC = (V9990VDP[50] << 8) | V9990VDP[51];
-        for (i = 0; i < 7; i++)
+        FC = !V9KScrMode ? (V9990VDP[37] & 0x02 ? ((V9990VDP[49] << 8) | V9990VDP[49]) : ((V9990VDP[48] << 8) | V9990VDP[48])) : (V9990VDP[48] << 8) | V9990VDP[49];
+        BC = !V9KScrMode ? (V9990VDP[37] & 0x02 ? ((V9990VDP[51] << 8) | V9990VDP[51]) : ((V9990VDP[50] << 8) | V9990VDP[50])) : (V9990VDP[50] << 8) | V9990VDP[51];
+        for (i = 7; i >=0; i--)
         {
-            SC = (RectData >>i) & 0x01 ? FC : BC;
+            SC = (V9990Port[2] >> i) & 0x01 ? FC : BC;
             switch (V9KImgWidth)
             {
             case 256:
                 switch (V9KImgHeight)
                 {
                 case 1024:  /* BD16 */
-                    VDPpsetBD16(ADX, DY, SC, LO);
+                    VDPpsetBD16(ADX, DY | DYOff, SC, LO);
                     break;
                 case 2048:  /* P1 Mode or BP6 or BD8 */
-                    if(!V9KScrMode)VDPpset16BP4(ADX, DY, ADX ,SC, LO);
-                    else VDPpset16BP6(ADX, DY, ADX, SC, LO);
+                    if(!V9KScrMode)VDPpset16BP4(ADX, DY | DYOff, ADX ,SC, LO);
+                    else VDPpset16BP6(ADX, DY | DYOff, ADX, SC, LO);
                     break;
                 case 4096:  /* BP4 */
-                    VDPpset16BP4(ADX, DY, ADX, SC, LO);
+                    VDPpset16BP4(ADX, DY | DYOff, ADX, SC, LO);
                     break;
                 default:
-                    VDPpset16BP4(ADX, DY, ADX ,SC, LO);
+                    VDPpset16BP4(ADX, DY | DYOff, ADX ,SC, LO);
                     break;
                 }
                 break;
@@ -1174,28 +1179,26 @@ void CmmcEngineV9990(void)
                 switch (V9KImgHeight)
                 {
                 case 512:   /* BD16(BytePerPixel 16) */
-                    VDPpsetBD16_512(ADX, DY, SC, LO);
+                    VDPpsetBD16_512(ADX, DY | DYOff, SC, LO);
                     break;
                 case 1024:  /* BP6 or BD8 */
-                    VDPpset16BP6_512(ADX, DY, ADX, SC, LO);
+                    VDPpset16BP6_512(ADX, DY | DYOff, ADX, SC, LO);
                     break;
                 case 2048:  /* P2 Mode or BP4 */
-                    VDPpset16BP4_512(ADX, DY, ADX, SC, LO);
+                    VDPpset16BP4_512(ADX, DY | DYOff, ADX, SC, LO);
                     break;
                 default:
-                    VDPpset16BP4_512(ADX, DY, ADX, SC, LO);
+                    VDPpset16BP4_512(ADX, DY | DYOff, ADX, SC, LO);
                     break;
                 }
                 break;
             case 1024:
-                VDPpset16BP4_1024(ADX, DY, ADX, SC, LO);
+                VDPpset16BP4_1024(ADX, DY | DYOff, ADX, SC, LO);
                 break;
             default:
-                VDPpset16BP4_512(ADX, DY, ADX,SC, LO);
+                VDPpset16BP4_512(ADX, DY | DYOff, ADX,SC, LO);
                 break;
             }
-
-            //V9990Port[5] |= 0x80;
             ADX = (ADX + TX) & (V9KImgWidth - 1);
             if (!--ANX)
             {
@@ -1385,7 +1388,7 @@ void BmxlEngineV9990(void)
 #define exec_bmxl_bd16    \
     if(!RectPos) { SC = (V9KVRAM[SA]<<8) | V9KVRAM[SA+1]; \
     SA = (SA +2)&0x7FFFF;}   \
-    RectPos = (RectPos+(2<<V9KPixelRes))&0x07;  \
+    RectPos = (RectPos+(2<<V9KPixelRes))&0x07;
 
     delta = GetVdpTimingValue(bmxl_timing);
     cnt = VdpOpsCntV9990;
@@ -1706,10 +1709,9 @@ void LineEngineV9990(void)
     register int DY = MMCV9990.DY;
     register int TX = MMCV9990.TX;
     register int TY = MMCV9990.TY;
-    register int MJ = MMCV9990.NX | (((unsigned int)V9990VDP[41] & 0x08) << 8);
-    register int MI = MMCV9990.NY;
+    register int MJ = (MMCV9990.NX | (((unsigned int)V9990VDP[41] & 0x08) << 8))&(V9KImgWidth-1);
+    register int MI = MMCV9990.NY&(V9KImgHeight-1);
     register int ASX = MMCV9990.ASX;
-    //register int ASX = (MMCV9990.NX-1)>>1;
     register int ADX = MMCV9990.ADX;
     register byte LO = MMCV9990.LO;
     register int cnt, FC;
@@ -1737,7 +1739,6 @@ void LineEngineV9990(void)
     delta = GetVdpTimingValue(lmmv_timing);
     cnt = VdpOpsCntV9990;
 
-    //FC = V9990VDP[48] << 8 | V9990VDP[49];
     FC = !V9KScrMode ? (V9990VDP[37] & 0x02 ? ((V9990VDP[49] << 8) | V9990VDP[49]) : ((V9990VDP[48] << 8) | V9990VDP[48])) : (V9990VDP[48] << 8) | V9990VDP[49];
     if (!(V9990VDP[44] & 0x01))
     {
