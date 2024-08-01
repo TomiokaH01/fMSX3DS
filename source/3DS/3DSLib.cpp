@@ -45,6 +45,13 @@ int FastForward;           /* Fast-forwarded UPeriod backup  */
 int SndSwitch;             /* Mask of enabled sound channels */
 int SndVolume;             /* Master volume for audio        */
 int OldScrMode;            /* fMSX "ScrMode" variable storage*/
+#ifdef VDP_V9990
+int OldV9KScrMode;
+static unsigned int V9kXPal[80];
+static unsigned short* V9KXBuf;
+void PutImageSuperImpose(void);
+#endif // VDP_V9990
+
 
 const char *Title     = "fMSX 6.0";       /* Program version */
 
@@ -217,6 +224,10 @@ int InitMachine(void)
   InMenu          = 0;
   FastForward     = 0;
   OldScrMode      = 0;
+#ifdef VDP_V9990
+  OldV9KScrMode = 0;
+#endif // VDP_V9990
+
   //NormScreen.Data = 0;
   //WideScreen.Data = 0;
 
@@ -354,6 +365,11 @@ void TrashMachine(void)
 
 	free(XBuf);
 	free(WBuf);
+
+#ifdef VDP_V9990
+	free(V9KXBuf);
+#endif // VDP_V9990
+
 	//SDL_WaitThread(thread1, NULL);
 }
 
@@ -362,6 +378,14 @@ void TrashMachine(void)
 /*************************************************************/
 void PutImage(void)
 {
+#ifdef VDP_V9990
+	if (V9990Dual & 0x01)
+	{
+		PutImageSuperImpose();
+		return;
+	}
+#endif // VDP_V9990
+
 #ifdef USE_3D
 	if (Stereo3DMode>0)
 	{
@@ -376,13 +400,38 @@ void PutImage(void)
 	if (OldIs3DNow)
 	{
 		OldIs3DNow = Is3DNow;
+#ifdef VDP_V9990
+		if (V9990Active)
+		{
+			if((V9KScrMode==1) || (V9KScrMode > 3))SetupWideScreen(true);
+			else SetupWideScreen(false);
+		}
+		else
+		{
+			if ((ScrMode == 6) || ((ScrMode == 7) && !ModeYJK) || (ScrMode == MAXSCREEN + 1))SetupWideScreen(true);
+			else SetupWideScreen(false);
+		}
+#else
 		if ((ScrMode == 6) || ((ScrMode == 7) && !ModeYJK) || (ScrMode == MAXSCREEN + 1))SetupWideScreen(true);
 		else SetupWideScreen(false);
+#endif // VDP_V9990
 	}
 #endif // USE_3D
 
 	if (AllowWide && !IsOld2DS)
 	{
+#ifdef VDP_V9990
+		if (V9990Active)
+		{
+			if ((V9KScrMode != OldV9KScrMode))
+			{
+				OldV9KScrMode = V9KScrMode;
+				if ((V9KScrMode == 1) || (V9KScrMode > 3))SetupWideScreen(true);
+				else SetupWideScreen(false);
+			}
+		}
+		else
+#endif // VDP_V9990
 		if (ScrMode != OldScrMode)
 		{
 			OldScrMode = ScrMode;
@@ -480,11 +529,19 @@ void PutImage(void)
 
 		u32* scrbuf = (u32*)ScreenTex.data;
 		u32* scrtexbf;
+#ifdef VDP_V9990
+		u32* XXBuf = V9990Active ? (u32*)V9KXBuf : (u32*)XBuf;
+#endif // VDP_V9990
+
 		for (j = 0; j < dheight; j += 4)
 		{
 			v0 = (j >> 3) * (swidth >> 3);
 			vx1 = (j * dwidth) >> 1;
+#ifdef VDP_V9990
+			srcbuf0 = XXBuf + vx1;
+#else
 			srcbuf0 = (u32*)XBuf + vx1;
+#endif // VDP_V9990
 			srcbuf1 = srcbuf0 + (dwidth >> 1);
 			srcbuf2 = srcbuf1 + (dwidth >> 1);
 			srcbuf3 = srcbuf2 + (dwidth >> 1);
@@ -525,7 +582,8 @@ void PutImage(void)
 		switch (ScreenRes)
 		{
 		case 0:		/* No Scale */
-			C2D_DrawImageAt(ScreenImage, 0.0f, 0.0f, 1.0f, NULL, 1.0f, 1.0f);
+			//C2D_DrawImageAt(ScreenImage, 0.0f, 0.0f, 1.0f, NULL, 1.0f, 1.0f);
+			C2D_DrawImageAt(ScreenImage, 65.0f, 10.0f, 1.0f, NULL, 1.0f, 1.0f);
 			break;
 		case 1:		/* Wide */
 			C2D_DrawImageAt(ScreenImage, 37.0f, 0.0f, 0.5f, NULL, 1.2f, 1.06f);
@@ -534,7 +592,8 @@ void PutImage(void)
 			C2D_DrawImageAt(ScreenImage, 0.0f, 0.0f, 0.5f, NULL, 1.46f, 1.06f);
 			break;
 		case 3:		/* Keep Aspect */
-			C2D_DrawImageAt(ScreenImage, 45.0f, 0.0f, 0.5f, NULL, 1.06f, 1.06f);
+			//C2D_DrawImageAt(ScreenImage, 45.0f, 0.0f, 0.5f, NULL, 1.06f, 1.06f);
+			C2D_DrawImageAt(ScreenImage, 55.0f, 0.0f, 0.5f, NULL, 1.06f, 1.06f);
 			break;
 		case 4:		/* ExtremelyLarge */
 			C2D_DrawImageAt(ScreenImage, -12.0f, -21.0f, 0.5f, NULL, 1.56f, 1.24f);
@@ -930,7 +989,8 @@ void PutImage(void)
 		switch (ScreenRes)
 		{
 		case 0:		/* No Scale */
-			C2D_DrawImageAt(WideImage, 0.0f, 0.0f, 1.0f, NULL, 0.5f, 1.0f);
+			//C2D_DrawImageAt(WideImage, 0.0f, 0.0f, 1.0f, NULL, 0.5f, 1.0f);
+			C2D_DrawImageAt(WideImage, 65.0f, 10.0f, 1.0f, NULL, 0.5f, 1.0f);
 			break;
 		case 1:		/* Wide */
 			C2D_DrawImageAt(WideImage, 37.0f, 0.0f, 0.5f, NULL, 0.6f, 1.06f);
@@ -939,7 +999,8 @@ void PutImage(void)
 			C2D_DrawImageAt(WideImage, 0.0f, 0.0f, 0.5f, NULL, 0.73f, 1.06f);
 			break;
 		case 3:		/* Keep Aspect */
-			C2D_DrawImageAt(WideImage, 45.0f, 0.0f, 0.5f, NULL, 0.53f, 1.06f);
+			//C2D_DrawImageAt(WideImage, 45.0f, 0.0f, 0.5f, NULL, 0.53f, 1.06f);
+			C2D_DrawImageAt(WideImage, 55.0f, 0.0f, 0.5f, NULL, 0.53f, 1.06f);
 			break;
 		case 4:		/* ExtremelyLarge */
 			C2D_DrawImageAt(WideImage, -12.0f, -21.0f, 0.5f, NULL, 0.78f, 1.24f);
@@ -972,6 +1033,17 @@ void PutImage(void)
 #ifdef USE_3D
 void PutImage3D(void)
 {
+#ifdef VDP_V9990
+	if (V9990Active)
+	{
+		if (V9KScrMode != OldV9KScrMode)
+		{
+			OldV9KScrMode = V9KScrMode;
+			SetupWideScreen(false);
+		}
+	}
+	else
+#endif // VDP_V9990
 	if (ScrMode != OldScrMode)
 	{
 		OldScrMode = ScrMode;
@@ -1005,6 +1077,10 @@ void PutImage3D(void)
 	u32* scrbuf = (u32*)ScreenTex.data;
 	u32* scrbufR = (u32*)ScreenTexR.data;
 	u32* scrtexbf, * scrtexbfR;
+#ifdef VDP_V9990
+	u32* XXBuf = V9990Active ? (u32*)V9KXBuf : (u32*)XBuf;
+#endif // VDP_V9990
+
 	if (Stereo3DMode == 1)
 	{
 		unsigned char RVal = 0, RVal2 = 0, BVal = 0, BVal2 = 0;
@@ -1012,7 +1088,11 @@ void PutImage3D(void)
 		{
 			v0 = (j >> 3) * (swidth >> 3);
 			vx1 = (j * dwidth) >> 1;
+#ifdef VDP_V9990
+			srcbuf0 = XXBuf + vx1;
+#else
 			srcbuf0 = (u32*)XBuf + vx1;
+#endif // VDP_V9990
 			srcbuf1 = srcbuf0 + (dwidth >> 1);
 			srcbuf2 = srcbuf1 + (dwidth >> 1);
 			srcbuf3 = srcbuf2 + (dwidth >> 1);
@@ -1101,7 +1181,11 @@ void PutImage3D(void)
 		{
 			v0 = (j >> 3) * (swidth >> 3);
 			vx1 = (j * dwidth) >> 1;
+#ifdef VDP_V9990
+			srcbuf0 = XXBuf + vx1;
+#else
 			srcbuf0 = (u32*)XBuf + vx1;
+#endif // VDP_V9990
 			srcbuf1 = srcbuf0 + (dwidth >> 1);
 			srcbuf2 = srcbuf1 + (dwidth >> 1);
 			srcbuf3 = srcbuf2 + (dwidth >> 1);
@@ -1160,7 +1244,8 @@ void PutImage3D(void)
 	switch (ScreenRes)
 	{
 	case 0:		/* No Scale */
-		C2D_DrawImageAt(ScreenImage, 0.0f, 0.0f, 1.0f, NULL, 1.0f, 1.0f);
+		//C2D_DrawImageAt(ScreenImage, 0.0f, 0.0f, 1.0f, NULL, 1.0f, 1.0f);
+		C2D_DrawImageAt(ScreenImage, 65.0f, 10.0f, 1.0f, NULL, 1.0f, 1.0f);
 		break;
 	case 1:		/* Wide */
 		C2D_DrawImageAt(ScreenImage, 37.0f, 0.0f, 0.5f, NULL, 1.2f, 1.06f);
@@ -1169,7 +1254,8 @@ void PutImage3D(void)
 		C2D_DrawImageAt(ScreenImage, 0.0f, 0.0f, 0.5f, NULL, 1.46f, 1.06f);
 		break;
 	case 3:		/* Keep Aspect */
-		C2D_DrawImageAt(ScreenImage, 45.0f, 0.0f, 0.5f, NULL, 1.06f, 1.06f);
+		//C2D_DrawImageAt(ScreenImage, 45.0f, 0.0f, 0.5f, NULL, 1.06f, 1.06f);
+		C2D_DrawImageAt(ScreenImage, 55.0f, 0.0f, 0.5f, NULL, 1.06f, 1.06f);
 		break;
 	case 4:		/* ExtremelyLarge */
 		C2D_DrawImageAt(ScreenImage, -12.0f, -21.0f, 0.5f, NULL, 1.56f, 1.24f);
@@ -1210,6 +1296,120 @@ void PutImage3D(void)
 }
 #endif // USE_3D
 
+#ifdef VDP_V9990
+void PutImageSuperImpose(void)
+{
+	if (V9990Active)
+	{
+		if (V9KScrMode != OldV9KScrMode)
+		{
+			OldV9KScrMode = V9KScrMode;
+			SetupWideScreen(false);
+		}
+	}
+	else
+		if (ScrMode != OldScrMode)
+		{
+			OldScrMode = ScrMode;
+			SetupWideScreen(false);
+		}
+	const int dwidth = WIDTH, dheight = HEIGHT;
+	const int swidth = 512, sheight = 256;
+	int i, j, vx0, vx1, v0;
+
+	u32* srcbuf0, * srcbuf1, * srcbuf2, * srcbuf3, *srcbuf4, *srcbuf5, *srcbuf6, *srcbuf7;
+
+	u32* scrbuf = (u32*)ScreenTex.data;
+	u32* scrtexbf;
+
+	for (j = 0; j < dheight; j += 4)
+	{
+		v0 = (j >> 3) * (swidth >> 3);
+		vx1 = (j * dwidth) >> 1;
+		srcbuf0 = (u32*)XBuf + vx1;
+		srcbuf1 = srcbuf0 + (dwidth >> 1);
+		srcbuf2 = srcbuf1 + (dwidth >> 1);
+		srcbuf3 = srcbuf2 + (dwidth >> 1);
+
+		srcbuf4 = (u32*)V9KXBuf + vx1;
+		srcbuf5 = srcbuf4 + (dwidth >> 1);
+		srcbuf6 = srcbuf5 + (dwidth >> 1);
+		srcbuf7 = srcbuf6 + (dwidth >> 1);
+
+		for (i = 0; i < (dwidth >> 3); ++i, srcbuf0 += 4, srcbuf1 += 4, srcbuf2 += 4, srcbuf3 += 4, srcbuf4 += 4, srcbuf5 +=4, srcbuf6 +=4, srcbuf7 +=4)
+		{
+			vx0 = (((v0 + i) << 6) + (((i << 3) & 0x04) << 2) | ((j & 0x04) << 3));
+
+			scrtexbf = scrbuf + (vx0 >> 1);
+
+			scrtexbf[0] = srcbuf4[0] ? srcbuf4[0] : srcbuf0[0];
+			scrtexbf[1] = srcbuf5[0] ? srcbuf5[0] : srcbuf1[0];
+			scrtexbf[2] = srcbuf4[1] ? srcbuf4[1] : srcbuf0[1];
+			scrtexbf[3] = srcbuf5[1] ? srcbuf5[1] : srcbuf1[1];
+			scrtexbf[4] = srcbuf6[0] ? srcbuf6[0] : srcbuf2[0];
+			scrtexbf[5] = srcbuf7[0] ? srcbuf7[0] : srcbuf3[0];
+			scrtexbf[6] = srcbuf6[1] ? srcbuf6[1] : srcbuf2[1];
+			scrtexbf[7] = srcbuf7[1] ? srcbuf7[1] : srcbuf3[1];
+
+			scrtexbf[8] = srcbuf4[2] ? srcbuf4[2] :srcbuf0[2];
+			scrtexbf[9] = srcbuf5[2] ? srcbuf5[2] : srcbuf1[2];
+			scrtexbf[10] = srcbuf4[3] ? srcbuf4[3] : srcbuf0[3];
+			scrtexbf[11] = srcbuf5[3] ? srcbuf5[3] : srcbuf1[3];
+			scrtexbf[12] = srcbuf6[2] ? srcbuf6[2] : srcbuf2[2];
+			scrtexbf[13] = srcbuf7[2] ? srcbuf7[2] : srcbuf3[2];
+			scrtexbf[14] = srcbuf6[3] ? srcbuf6[3] : srcbuf2[3];
+			scrtexbf[15] = srcbuf7[3] ? srcbuf7[3] : srcbuf3[3];
+		}
+	}
+
+	C3D_FrameBegin(C3D_FRAME_NONBLOCK);
+	C2D_TargetClear(TopRenderTarget, C2D_Color32(0, 0, 0, 255));
+
+	C2D_SceneBegin(TopRenderTarget);
+	switch (ScreenRes)
+	{
+	case 0:		/* No Scale */
+		C2D_DrawImageAt(ScreenImage, 65.0f, 10.0f, 1.0f, NULL, 1.0f, 1.0f);
+		break;
+	case 1:		/* Wide */
+		C2D_DrawImageAt(ScreenImage, 37.0f, 0.0f, 0.5f, NULL, 1.2f, 1.06f);
+		break;
+	case 2:		/* Full Screen */
+		C2D_DrawImageAt(ScreenImage, 0.0f, 0.0f, 0.5f, NULL, 1.46f, 1.06f);
+		break;
+	case 3:		/* Keep Aspect */
+		C2D_DrawImageAt(ScreenImage, 55.0f, 0.0f, 0.5f, NULL, 1.06f, 1.06f);
+		break;
+	case 4:		/* ExtremelyLarge */
+		C2D_DrawImageAt(ScreenImage, -12.0f, -21.0f, 0.5f, NULL, 1.56f, 1.24f);
+		break;
+	default:
+		break;
+	}
+	if (IsShowFPS)
+	{
+		DrawText(std::to_string(fpsval).c_str(), 350, 0, 1.0f, 0.5f, 0.5f, C2D_Color32(255, 255, 255, 255));
+		DrawText(("Skip" + std::to_string(4 - (UPeriod / 25))).c_str(), 310, 0, 1.0f, 0.5f, 0.5f, C2D_Color32(255, 255, 255, 255));
+	}
+#ifdef _MSX0
+	if (UseMSX0)
+	{
+		if ((currJoyMode[0] >= HIDE_KEYBOARD) || (currJoyMode[1] >= HIDE_KEYBOARD))
+		{
+			C2D_TargetClear(BottomRenderTartget, C2D_Color32(0, 0, 0, 255));
+
+			C2D_SceneBegin(BottomRenderTartget);
+			C2D_DrawImageAt(ScreenImage, 0.0f, 0.0f, 1.0f, NULL, 1.0f, 1.0f);
+			DrawHUD();
+		}
+	}
+#endif // _MSX0
+
+	C3D_FrameEnd(0);
+}
+#endif // VDP_V9990
+
+
 
 void  SetupWideScreen(bool isWide)
 {
@@ -1227,6 +1427,12 @@ void  SetupWideScreen(bool isWide)
 			GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO)));
 	}
 	IsWide = isWide;
+}
+
+
+void WideScreenOn()
+{
+	SetupWideScreen(true);
 }
 
 
@@ -2462,8 +2668,14 @@ void ErrorLogUpdate()
 void SaveScrrenShot(const char* pathchr)
 {
 	DrawMessage("Saving screenshot.Please Wait.",NULL, 50, 100, 1, false);
+#ifdef VDP_V9990
+	SDL_Surface* topsurf = IsWide ? SDL_CreateRGBSurfaceFrom(WBuf, WIDTH * 2, HEIGHT, 16, 4 * WIDTH, 0xF800, 0x07E0, 0x001F, 0)
+		: (V9990Active ? SDL_CreateRGBSurfaceFrom(V9KXBuf, WIDTH, HEIGHT, 16, 2 * WIDTH, 0xF800, 0x07E0, 0x001F, 0)
+			: SDL_CreateRGBSurfaceFrom(XBuf, WIDTH, HEIGHT, 16, 2 * WIDTH, 0xF800, 0x07E0, 0x001F, 0));
+#else
 	SDL_Surface* topsurf = IsWide ? SDL_CreateRGBSurfaceFrom(WBuf, WIDTH*2, HEIGHT, 16, 4 * WIDTH, 0xF800, 0x07E0, 0x001F, 0)
 		: SDL_CreateRGBSurfaceFrom(XBuf, WIDTH, HEIGHT, 16, 2 * WIDTH, 0xF800, 0x07E0, 0x001F, 0);
+#endif // VDP_V9990
 	SDL_SaveBMP(topsurf, pathchr);
 }
 
@@ -2780,6 +2992,19 @@ void LoadCartAtStart()
 }
 
 
+void InitXbuf()
+{
+	if(V9KXBuf==NULL)V9KXBuf = (unsigned short*)malloc(WIDTH * HEIGHT * sizeof(unsigned short) * 2);
+	int i;
+	int XSize = WIDTH * HEIGHT * 2;
+	for (i = 0; i < XSize; i++)
+	{
+		//XBuf[i] = 0x00;
+		V9KXBuf[i] = 0x00;
+	}
+}
+
+
 void ShowMessage3DS(char* msg, char* msg2)
 {
 	DrawMessage(msg, msg2, 10, 50, 1000, true);
@@ -2836,3 +3061,12 @@ void Show_3DS_BreakPointArg(const char* format, ...)
 	Debug_BreakPoint3DS(msg);
 	va_end(args);
 }
+
+#ifdef VDP_V9990
+void V9990SetColor(byte N, byte R, byte G, byte B)
+{
+	unsigned int J;
+	J = ((unsigned int)R << 11) | ((unsigned int)G << 6) | (unsigned int)B;
+	V9kXPal[N >> 2] = J;
+}
+#endif // VDP_V9990
