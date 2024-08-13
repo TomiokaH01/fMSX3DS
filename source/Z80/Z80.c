@@ -775,6 +775,15 @@ word RunZ80(Z80 *R)
       case PFX_FD: CodesFD(R);break;
       case PFX_DD: CodesDD(R);break;
     }
+
+#ifdef AUDIO_SYNC
+    if (audioCycleCnt > 160)
+    {
+        CalcAudio();
+        audioCycleCnt -= 160;
+    }
+#endif // AUDIO_SYNC
+
  
     /* If cycle counter expired... */
     if(R->ICount<=0)
