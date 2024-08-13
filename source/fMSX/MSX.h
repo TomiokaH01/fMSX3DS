@@ -62,7 +62,11 @@ extern "C" {
 #define CPU_H256     (HREFRESH_256/6)
 
 /* Maximum state data size */
+#ifdef VDP_V9990
+#define MAX_STASIZE  (0x8000+(RAMPages*0x4000)+(VRAMPages*0x4000)+(V9990Active ? 32*0x4000 : 0))
+#else
 #define MAX_STASIZE  (0x8000+(RAMPages*0x4000)+(VRAMPages*0x4000))
+#endif // VDP_V9990
 
 #define INT_IE0      0x01   /* VDP interrupt modes           */
 #define INT_IE1      0x02
@@ -115,11 +119,12 @@ extern "C" {
 #define MAP_WingWarr   28   /* Wing Warrior                  */
 #define MAP_ESESCC     29   /* Ese SCC                       */
 #define MAP_SYNTHE     30   /* Konami's Synthesizer          */
+#define MAP_ASCII16Big 31   /* ASCII16 over 2MB size.        */
 //#define MAP_PANSONIC   31   /* Firmware ROM for Panasonic MSX*/
-#define MAP_GUESS      31   /* Guess mapper automatically    */
+#define MAP_GUESS      32   /* Guess mapper automatically    */
 
 #define MAP_SRAM(N) \
-  (((N)==MAP_ASCII8)||((N)==MAP_ASCII16)|| \
+  (((N)==MAP_ASCII8)||((N)==MAP_ASCII16)|| ((N)==MAP_ASCII16Big) || \
    ((N)==MAP_FMPAC) ||((N)==MAP_GMASTER2)|| ((N)==MAP_ASCII8SRM32) || \
    ((N)==MAP_ASCII16_2) || ((N)==MAP_ZeminaDS2) || ((N)==MAP_Wizardry) ||\
    ((N)==MAP_MANBOW2) || ((N)==MAP_ESESCC))
@@ -145,9 +150,38 @@ extern "C" {
 
 #ifdef VDP_V9990
 #include "V9990.h"
-extern byte V9990VDP[64];
-extern byte V9990Port[16];
-void RefreshLineB2(register byte Y);
+extern unsigned char V9990VDP[64];
+extern unsigned char V9990Port[16];
+extern unsigned char V9KPal[256];
+extern unsigned char V9KScrMode;
+extern unsigned char V9KVDP8Val;
+extern unsigned int V9KYScrollOff;
+extern unsigned int V9KYScrollOff2;
+extern unsigned int V9KYScrollOffB;
+extern unsigned int V9KYScrollOffB2;
+extern int V9KImgWidth;
+extern int V9KImgHeight;
+extern int V9KScanLine;
+extern unsigned char V9KPixelRes;
+extern byte* V9KVRAM;
+unsigned short* RefreshBorderV9K(register byte Y, register unsigned short C);
+unsigned short* RefreshBorderV9K512(register byte Y, register unsigned short C);
+void SpritesDrawP2(register byte Y, unsigned short* P);
+void CursorDraw(register byte Y, unsigned short* P);
+void RefreshLineB1(register byte Y);
+void RefreshLineB3(register byte Y);
+void RefreshLineB6(register byte Y);
+void RefreshLineBP6(register byte Y);
+void RefreshLineBP6Wide(register byte Y);
+void RefreshLineBYUV(register byte Y);
+void RefreshLineBD16(register byte Y);
+void RefreshLineBD16Wide(register byte Y);
+void RefreshLineP1AB(register byte Y);
+void RefreshLineP2(register byte Y);
+unsigned short YUVColor(register int Y, register int U, register int V);
+void V9990SetPalette(void);
+void V9990SetColor(byte N, byte R, byte G, byte B);
+word SetIRQV9K(void);
 void InitV9990(void);
 #endif // VDP_V9990
 
@@ -183,7 +217,7 @@ void InitV9990(void);
 #define MAXSLOTS    9       /* Number of cartridge slots     */
 //#define MAXSLOTS    10       /* Number of cartridge slots     */
 #define MAXCARTS    2       /* Number of user cartridges     */
-#define MAXMAPPERS  26       /* Total defined MegaROM mappers */
+#define MAXMAPPERS  32       /* Total defined MegaROM mappers */
 #else
 #define MAXSLOTS    6       /* Number of cartridge slots     */
 #define MAXCARTS    2       /* Number of user cartridges     */

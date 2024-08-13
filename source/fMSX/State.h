@@ -98,6 +98,10 @@ unsigned int SaveState(unsigned char *Buf,unsigned int MaxSize)
     for(K=0;K<4;++K) State[J++]=ROMMapper[I][K];
   }
 
+//#ifdef VDP_V9990
+//  State[J++] = V9990Active;
+//#endif // VDP_V9990
+
   /* Write out data structures */
   SaveSTRUCT(CPU);
   SaveSTRUCT(PPI);
@@ -110,6 +114,15 @@ unsigned int SaveState(unsigned char *Buf,unsigned int MaxSize)
   SaveARRAY(State);
   SaveDATA(RAMData,RAMPages*0x4000);
   SaveDATA(VRAM,VRAMPages*0x4000);
+#ifdef VDP_V9990
+  if (V9990Active)
+  {
+      SaveARRAY(V9990VDP);
+      SaveARRAY(V9990Port);
+      SaveARRAY(V9KPal);
+      SaveDATA(V9KVRAM, 32 * 0x4000);
+  }
+#endif // VDP_V9990
 
   /* Return amount of data written */
   return(Size);
@@ -139,6 +152,15 @@ unsigned int LoadState(unsigned char *Buf,unsigned int MaxSize)
   LoadARRAY(State);
   LoadDATA(RAMData,RAMPages*0x4000);
   LoadDATA(VRAM,VRAMPages*0x4000);
+#ifdef VDP_V9990
+  if (V9990Active)
+  {
+      LoadARRAY(V9990VDP);
+      LoadARRAY(V9990Port);
+      LoadARRAY(V9KPal);
+      LoadDATA(V9KVRAM, 32 * 0x4000);
+  }
+#endif // VDP_V9990
 
   /* Parse hardware state */
   J=0;
@@ -185,6 +207,10 @@ unsigned int LoadState(unsigned char *Buf,unsigned int MaxSize)
     }
   }
 
+//#ifdef VDP_V9990
+//  V9990Active = State[J++];
+//#endif // VDP_V9990
+
   /* Set RAM mapper pages */
   if(RAMMask)
     for(I=0;I<4;++I)
@@ -217,6 +243,17 @@ unsigned int LoadState(unsigned char *Buf,unsigned int MaxSize)
 
   /* Set screen mode and VRAM table addresses */
   SetScreen();
+
+#ifdef VDP_V9990
+  if (V9990Active)
+  {
+      for (I = 0; I < 256; I += 4)
+          V9990SetColor(I, V9KPal[I], V9KPal[I + 1], V9KPal[I + 2]);
+
+      if (V9990Active)SetScreenV9990();
+  }
+#endif // VDP_V9990
+
 
   /* Set some other variables */
   VPAGE    = VRAM+((int)VDP[14]<<14);
@@ -281,6 +318,11 @@ int SaveSTA(const char *Name)
   Header[7] = J&0x00FF;
   Header[8] = J>>8;
 
+#ifdef VDP_V9990
+  /* If V9990 is active, add that to header to change the size of the state. */
+  Header[9] = V9990Active;
+#endif // VDP_V9990
+
   /* Write out the header and the data */
   if(F && (fwrite(Header,1,16,F)!=16))  { fclose(F);F=0; }
   if(F && (fwrite(Buf,1,Size,F)!=Size)) { fclose(F);F=0; }
@@ -318,6 +360,10 @@ int LoadSTA(const char *Name)
   if((Header[5]!=(RAMPages&0xFF))||(Header[6]!=(VRAMPages&0xFF)))
   { fclose(F);return(0); }
 #endif // !_3DS
+
+#ifdef VDP_V9990
+  V9990Active = Header[9];
+#endif // VDP_V9990
 
   /* Allocate temporary buffer */
   //Buf = malloc(MAX_STASIZE);

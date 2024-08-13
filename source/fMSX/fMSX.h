@@ -305,7 +305,8 @@ int fmsxInit()
 
     /* Start fMSX! */
     if (!InitMachine()) return(1);
-    StartMSX(Mode, 32, 8);
+    //StartMSX(Mode, 32, 8);
+    StartMSX(Mode, RAMPages, 8);
     TrashMSX();
     TrashMachine();
     return(0);

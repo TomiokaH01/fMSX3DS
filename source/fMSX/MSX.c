@@ -334,6 +334,7 @@ unsigned char waitStep = 3;
 byte* Kanji2;                       /* Kanji ROM Level 2 4096x32                  */
 byte OldROMType[MAXSLOTS];
 byte ROMLen[MAXSLOTS];
+byte AllowSCC[2] = { 1, 1 };
 
 int currJoyMode[2] = { 1, 0 };
 int JoyMode[2] = { 1,0 };
@@ -433,26 +434,53 @@ angularRate aRate;
 #ifdef VDP_V9990
 typedef struct
 {
-    //byte VDP[64];
-    //byte VDPStatus[16];
     byte Active;
     byte SelectReg;
     byte SystemControlReg;
     byte IncVRAMWrite;
     byte IncVRAMRead;
     byte IncPaletteWrite;
+    byte pending;
     uint VRAMReadInt;
     uint VRAMWriteInt;
-    uint VRAMMask;
 }V9990;
 V9990 vdpV9990;
-byte V9990VDP[64];
-byte V9990Port[16];
+unsigned char V9990VDP[64];
+unsigned char V9990Port[16];
+unsigned char V9KPal[256];
 
+unsigned char UseV9990 = 0;
 unsigned char V9990Active = 0;
+unsigned char V9990Dual = 0;
+int V9KScanLine = 0;
+int V9KcurrLine = 0;
+int V9kFirstLine = 0;
+int V9KImgWidth = 256;
+int V9KImgHeight = 2048;
+unsigned int V9KYScrollOff = 0;
+unsigned int V9KYScrollOff2 = 0;
+unsigned int V9KYScrollOffB = 0;
+unsigned int V9KYScrollOffB2 = 0;
+
+byte V9KVDP8Val = 0;
+byte V9KScrMode = 0;
+byte V9KType = 9;
+byte V9KPixelRes = 1;
+byte* V9KVRAM;
 
 void V9990Out(register byte R, register byte V);
+byte SetScreenV9990(void);
 #endif // VDP_V9990
+
+#ifdef USE_OVERCLOCK
+unsigned char overClockRatio = 0;
+#endif // USE_OVERCLOCK
+
+
+#ifdef AUDIO_SYNC
+int audioCycleCnt = 0;
+#endif // AUDIO_SYNC
+
 
 
 #if defined(HDD_NEXTOR) || defined(HDD_IDE)
@@ -480,7 +508,19 @@ static const char* ROMNames[MAXMAPPERS + 1] =
 {
   "GENERIC/8kB","GENERIC/16kB","KONAMI5/8kB",
   "KONAMI4/8kB","ASCII/8kB","ASCII/16kB",
+#ifdef _3DS
+  "GMASTER2/SRAM","FMPAC/SRAM","ASCII/16kBKOEI",
+  "ASCII/16kBAlt","CrossBlaim","Harryfox",
+  "Zemina","ZeminaDS2","XXin1 ",
+  "126in1","MSX90","SWANGI",
+  "DOOLY","LodeRunner","Pierrot",
+  "RType","Wizardry","MANBOW2",
+  "MAJUTSUSHI","SCCPLUS","SCCPLUS_2",
+  "PlainROM","WingWarrior","ESESCC",
+  "SYNTHE","ASCII/16kbBig","UNKNOWN"
+#else
   "GMASTER2/SRAM","FMPAC/SRAM","UNKNOWN"
+  #endif // _3DS
 };
 
 /** Keyboard Mapping *****************************************/
@@ -1631,8 +1671,12 @@ int ResetMSX(int NewMode, int NewRAMPages, int NewVRAMPages)
     /* Correct RAM and VRAM sizes */
     if ((NewRAMPages < (MODEL(MSX_MSX1) ? 4 : 8)) || (NewRAMPages > 256))
         NewRAMPages = MODEL(MSX_MSX1) ? 4 : 8;
+#ifdef TURBO_R
+    if ((MODEL(MSX_MSXTR)) && NewRAMPages < 16)NewRAMPages = 16;
+#endif // TURBO_R
     if ((NewVRAMPages < (MODEL(MSX_MSX1) ? 2 : 8)) || (NewVRAMPages > 8))
         NewVRAMPages = MODEL(MSX_MSX1) ? 2 : 8;
+
 
     /* If changing amount of RAM... */
     if (NewRAMPages != RAMPages)
@@ -1693,6 +1737,7 @@ int ResetMSX(int NewMode, int NewRAMPages, int NewVRAMPages)
             if (ROMType[J] == MAP_ASCII8)SetMegaROM(J, 0, 0, 0, 0);
             else if (ROMType[J] == MAP_ASCII16)SetMegaROM(J, 0, 1, 0, 1);
             else if (ROMType[J] == MAP_ASCII16_2)SetMegaROM(J, 0, 1, 0, 1);
+            else if (ROMType[J] == MAP_ASCII16Big)SetMegaROM(J, 0, 1, 0, 1);
             else if (ROMType[J] == MAP_MSX90)SetMegaROM(J, 0, 1, 0, 1);
             else if (ROMType[J] == MAP_RType)SetMegaROM(J, 0x2E, 0x2F, 0, 1);
             else if (ROMType[J] == MAP_LodeRunner)SetMegaROM(J, 0, 1, 0, 1);
@@ -1779,8 +1824,16 @@ int ResetMSX(int NewMode, int NewRAMPages, int NewVRAMPages)
 #endif // ALTPCM
 #endif // TURBO_R
 
-
 #ifdef ALTSOUND
+    if ((ROMType[0] == MAP_SCCPLUS || ROMType[0] == MAP_SCCPLUS_2 || ROMType[1]==MAP_SCCPLUS || ROMType[1]==MAP_SCCPLUS_2) || (ForceSCCP))
+    {
+        SCCEnhanced = 1;
+    }
+    else
+    {
+        SCCEnhanced = 0;
+    }
+
     /* Reset soundchips */
     ResetSound();
 #endif
@@ -1845,9 +1898,8 @@ int ResetMSX(int NewMode, int NewRAMPages, int NewVRAMPages)
 #endif // _3DS
 
 #ifdef VDP_V9990
-    vdpV9990.VRAMMask = ~(VRAMPages << 14);
-    //vdpV9990.Active = 0;
-    //V9990Active = 0;
+    V9990Active = 0;
+    V9990Dual = 0;
 #endif // VDP_V9990
 
 
@@ -1932,12 +1984,15 @@ byte RdZ80(word A)
         case 0:     /* Cartridge Slot A */
         case 1:     /* Cartridge Slot B */
             CPU.ICount -= 2;
-            if (CartSpecial[I] == CART_READSCC)
+            //if (CartSpecial[I] == CART_READSCC)
+            if ((CartSpecial[0] == CART_READSCC) || (CartSpecial[1]==CART_READSCC))
             {
                 if (A >= 0x9800 && A < 0xA000)
                 {
-                    if (SCCOn[I] && (CartSpecial[I] == CART_READSCC))return (Read2212(A));
-                    else if (A == 0x9800) return 0xFF;
+                    if (SCCOn[I])return (Read2212(A));
+                    //else if (A == 0x9800) return 0xFF;
+                    //if (SCCOn[I] && (CartSpecial[I] == CART_READSCC))return (Read2212(A));
+                    //else if (A == 0x9800) return 0xFF;
                 }
             }
             break;
@@ -1997,8 +2052,15 @@ byte RdZ80(word A)
             if (A >= 0x9800 && A < 0xA000)
                 //if ((A & 0xE000) == 0x8000 && A >= 0x9800)
             {
-                if ((SCCOn[0] && CartSpecial[0] == CART_READSCC) || (SCCOn[1] && CartSpecial[1] == CART_READSCC))return (Read2212(A));
-                else if (A == 0x9800) return 0xFF;
+                byte J, I, PS, SS;
+                J = A >> 14;
+                PS = PSL[J];
+                SS = SSL[J];
+                I = CartMap[PS][SS];
+                if (SCCOn[I])return (Read2212(A));
+
+                //if ((SCCOn[0] && CartSpecial[0] == CART_READSCC) || (SCCOn[1] && CartSpecial[1] == CART_READSCC))return (Read2212(A));
+                //else if (A == 0x9800) return 0xFF;
             }
         }
     }
@@ -2204,20 +2266,33 @@ byte InZ80(word Port)
     {
 #ifdef _MSX0
     case 0x08:
+    case 0x58:      /* firmware 0.07.08 */
         return (InMSX0IOT());
 #endif // _MSX0
 
 #ifdef VDP_V9990
     case 0x60:  /* VRAM DATA  */
-        Port = VRAM[vdpV9990.VRAMReadInt];
-        if (vdpV9990.IncVRAMRead)vdpV9990.VRAMReadInt = (vdpV9990.VRAMReadInt + 1) & vdpV9990.VRAMMask;
+        if (!V9990Active)return 0x00;
+        Port = V9KVRAM[vdpV9990.VRAMReadInt];
+        if (vdpV9990.IncVRAMRead)vdpV9990.VRAMReadInt = (vdpV9990.VRAMReadInt + 1) & 0x7FFFF;
         return Port;
     case 0x61: /* PALETTE */
         //if (Verbose & 0x20) printf("I/O: Read V9990 Palette\n");
-        return 0xFF;
+        if (!V9990Active)return NORAM;
+        Port = V9KPal[V9990VDP[14]];
+        if (!(V9990VDP[13] & 0x10))
+        {
+            V9990VDP[14] += (V9990VDP[14] & 0x03) == 2 ? 2 : (((V9990VDP[14] & 0x03) == 3) ? -3 : 1);
+        }
+        return Port;
+    case 0x62:  /* COMMAND DATA */
+        if (!V9990Active)return NORAM;
+        Port = V9990Port[2];
+        VDPReadV9990();
+        return Port;
     case 0x63:  /* REGISTER DATA */
-        if (Verbose & 0x20) printf("I/O: Read V9990 Register Data VDP[%02Xh]\n", vdpV9990.SelectReg & 0x3F);
-        //Port = VDP[vdpV9990.SelectReg & 0x3F];
+        //if (Verbose & 0x20) printf("I/O: Read V9990 Register Data VDP[%02Xh]\n", vdpV9990.SelectReg & 0x3F);
+        if (!V9990Active)return NORAM;
         Port = V9990VDP[vdpV9990.SelectReg & 0x3F];
         if (!(vdpV9990.SelectReg & 0x40))
         {
@@ -2225,13 +2300,25 @@ byte InZ80(word Port)
         }
         return Port;
     case 0x65:  /* STATUS */
-        if (Verbose & 0x20) printf("I/O: Read V9990 Status\n");
-        //Port = (vdpV9990.SystemControlReg & 0x01) << 2;
-        //Port = VDPStatus[2];
+        //if (Verbose & 0x20) printf("I/O: Read V9990 Status\n");
+        if (!V9990Active)return 0x00;
         Port = V9990Port[5];
         Port |= (vdpV9990.SystemControlReg & 0x01) << 2;
-        Port |= 0x80;
         return Port;
+    case 0x66:  /* INTERRUPT FLAG */
+        //if (Verbose & 0x20) printf("I/O: Read V9990 Interrupt [%d]\n", V9990Port[6] & 0x07);
+        if (!V9990Active)return NORAM;
+        return V9990Port[6] & 0x07;
+    case 0x69: /* Kanji support */
+        if (!V9990Active)return NORAM;
+        Port = Kanji ? Kanji[KanLetter + KanCount] : NORAM;
+        KanCount = (KanCount + 1) & 0x1F;
+        return(Port);
+    case 0x6B: /* Kanji support for Kanji level 2 */
+        if (!V9990Active)return NORAM;
+        Port = Kanji2 ? Kanji2[KanLetter + KanCount] : NORAM;
+        KanCount = (KanCount + 1) & 0x1F;
+        return(Port);
 #endif // VDP_V9990
 
 
@@ -2317,9 +2404,6 @@ byte InZ80(word Port)
         /*return(Rd8251(&SIO,Port&0x07));*/
 
     case 0x98: /* VRAM read port */
-#ifdef VDP_V9990
-        //if (V9990Active)return(NORAM);
-#endif // VDP_V9990
 #ifdef TURBO_R
         UpdateVDPDelay();
 #endif // TURBO_R
@@ -2355,9 +2439,6 @@ byte InZ80(word Port)
         return(Port);
 
     case 0x99: /* VDP status registers */
-#ifdef VDP_V9990
-        //if (V9990Active)return(NORAM);
-#endif // VDP_V9990
 #ifdef TURBO_R
         UpdateVDPDelay();
 #endif // TURBO_R
@@ -2617,6 +2698,7 @@ void OutZ80(word Port, byte Value)
 
 #ifdef _MSX0
     case 0x08:
+    case 0x58:  /* firmware 0.07.08 */
         OutMSX0IOT(Value);
         return;
 #endif // _MSX0
@@ -2624,65 +2706,97 @@ void OutZ80(word Port, byte Value)
 #ifdef VDP_V9990
         /* Ymaha V9990 VDP Output. Based on infomation from msx-sdcc@wiki*/
         /* https://w.atwiki.jp/msx-sdcc/pages/50.html */
+        /* And Yamaha V9990 E-VDP-III Programmers Manual by MSX BANZAI!*/
+        /* https://web.archive.org/web/20230224003838/http://msxbanzai.tni.nl/v9990/manual.html */
         /* And openMSX and WebMSX.*/
         /* https://openmsx.org */
         /* http://webmsx.org */
     case 0x60:  /*  VRAM DATA  */
+        if (!V9990Active)return;
         //if (Verbose & 0x20) printf("I/O: Write V9990 VRAM Data[%02Xh] : [%02Xh] \n", vdpV9990.VRAMWriteInt , Value);
-        VRAM[vdpV9990.VRAMWriteInt] = Value;
-        if (vdpV9990.IncVRAMWrite)vdpV9990.VRAMWriteInt = (vdpV9990.VRAMWriteInt + 1) & vdpV9990.VRAMMask;
+        V9KVRAM[vdpV9990.VRAMWriteInt] = Value;
+        if (vdpV9990.IncVRAMWrite)vdpV9990.VRAMWriteInt = (vdpV9990.VRAMWriteInt + 1) & 0x7FFFF;
         return;
-    case 0x61:
+    case 0x61: /* PALETTE DATA */
+        if (!V9990Active)return;
+        if ((V9990VDP[14] & 0x03) == 0x03)
+        {
+            V9990VDP[14] &= ~0x03;
+            return;
+        }
+        Value &= !(V9990VDP[14] & 0x03) ? 0x9F : 0x1F;
+        V9KPal[V9990VDP[14]] = Value;
+        V9990SetPalette();
+        V9990VDP[14] = (V9990VDP[14] & 0x03) == 0x02 ? (V9990VDP[14] + 2) & 0xFF : V9990VDP[14] + 1;
+        return;
+    case 0x62:  /* COMMAND DATA */
+        if (!V9990Active)return;
+        VDPWriteV9990(Value);
         return;
     case 0x63:  /* REGISTER DATA */
-        //if (vdpV9990.SelectReg == 0x09)
-        //{
-            if (Verbose & 0x20) printf("I/O: Write V9990 Register Data VDP[%02Xh] : [%02Xh] \n", vdpV9990.SelectReg & 0x3F, Value);
-        //}
-        V9990Out(vdpV9990.SelectReg, Value);
-        //if(Value<7)vdpV9990.VDP[vdpV9990.SelectReg & 0x3F] = Value;
-        //else VDP[vdpV9990.SelectReg & 0x3F] = Value;
-        V9990VDP[vdpV9990.SelectReg & 0x3F] = Value;
+        if (Verbose & 0x20)
+        {
+            if ((((vdpV9990.SelectReg) & 0x3F) == 0x06) || (((vdpV9990.SelectReg) & 0x3F) == 0x07) || (((vdpV9990.SelectReg) & 0x3F) == 0x1B)
+                //    || ((((vdpV9990.SelectReg) & 0x3F) == 44) && (Value != 0))
+                //    || ((((vdpV9990.SelectReg) & 0x3F) == 0x12) && (Value & 0xC0))
+                //    || (((vdpV9990.SelectReg) & 0x3F) == 0x2E) || (((vdpV9990.SelectReg) & 0x3F) == 0x2F)
+                || ((((vdpV9990.SelectReg) & 0x3F) == 0x16) && (Value & 0xC0)) || ((((vdpV9990.SelectReg) & 0x3F) == 0x0D) && (Value & 0xE0)))
+            {
+                printf("I/O: Write V9990 Register Data VDP[%02Xh] : [%02Xh] \n", vdpV9990.SelectReg & 0x3F, Value);
+            }
+        }
+
+        if (!V9990Active)return;
+        V9990Out((vdpV9990.SelectReg)&0x3F, Value);
         if (!(vdpV9990.SelectReg & 0x80))
         {
             vdpV9990.SelectReg = (vdpV9990.SelectReg & ~0x3F) | ((vdpV9990.SelectReg + 1) & 0x3F);
         }
         return;
     case 0x64:  /* REGISTER SELECT */
-        if (Verbose & 0x20) printf("I/O: Write V9990 Register Select[%02Xh]\n", Value);
-        if (!V9990Active)
-        {
-            vdpV9990.Active = 1;
-            V9990Active = 1;
+        //if (Verbose & 0x20) printf("I/O: Write V9990 Register Select[%02Xh]\n", Value);
+        if (!V9990Active)InitV9990();
 
-            for (Port = 0; Port < 64; Port++)V9990VDP[Port] = 0;
-            for (Port = 0; Port < 16; Port++)V9990Port[Port] = 0;
-
-            ///* Import Interrupt flag of V9958/V9938 to V9990 */
-            //I = VDPStatus[2];
-            //J = ((VDP[1] & 0x20) ? 1 : 0) | ((VDP[0] & 10) ? 2 : 0);
-            //Port = ((VDPStatus[1] & 0x01) ? 1 : 0) | ((VDPStatus[0] & 0x80) ? 2 : 0);
-            for (Port = 0; Port < 64; Port++)VDP[Port] = 0;
-            for (Port = 0; Port < 16; Port++)VDPStatus[Port] = 0;
-            //VDPStatus[5] = I;
-            //VDPStatus[6] = Port;
-            //VDP[9] = J;
-
-            //if (VDP[9] & 0x01)SetIRQ(INT_IE0);
-            //else SetIRQ(~INT_IE0);
-            //if (VDP[0] & 0x10) SetIRQ(INT_IE1);
-            //else SetIRQ(~INT_IE1);
-
-            //if (VDP[9] & 0x01)SetIRQ(INT_IE0);
-            //else SetIRQ(~INT_IE0);
-            //if (VDP[9] & 0x02)SetIRQ(INT_IE1);
-            //else SetIRQ(~INT_IE1);
-        }
         vdpV9990.SelectReg = Value;
+        return;
+    case 0x66:  /* INTERRUPT FLAG */
+        //if (Verbose & 0x20) printf("I/O: Write V9990 Interrupt Flag[%02Xh]\n", Value);
+        if (!V9990Active)return;
+        if (Value & 0x07)
+        {
+            V9990Port[6] &= ~Value;
+            SetIRQV9K();
+        }
         return;
     case 0x67:  /* SYSTEM CONTROL */
         if (Verbose & 0x20) printf("I/O: Write V9990 System Control[%02Xh]\n", Value);
+        if (!V9990Active)InitV9990();
+        if (!(vdpV9990.SystemControlReg & 0x02) && (Value&0x02))
+        {
+            V9990Port[0] = V9990Port[1] = V9990Port[2] = V9990Port[3] = V9990Port[4] = V9990Port[5] = V9990Port[6] = 0;
+            vdpV9990.IncVRAMWrite = 0;
+            vdpV9990.VRAMWriteInt = 0;
+            vdpV9990.IncVRAMRead = 0;
+            vdpV9990.VRAMReadInt = 0;
+            vdpV9990.SelectReg = 0;
+            vdpV9990.pending = 0;
+        }
         vdpV9990.SystemControlReg = Value;
+        return;
+    case 0x68: /* Upper bits of Kanji ROM address */
+    case 0x6A: /* Upper bits of Kanji ROM address for Kanji level 2 */
+        if (!V9990Active)return;
+        KanLetter = (KanLetter & 0x1F800) | ((int)(Value & 0x3F) << 5);
+        KanCount = 0;
+        return;
+    case 0x69: /* Lower bits of Kanji ROM address */
+    case 0x6B: /* Lower bits of Kanji ROM address for Kanji level 2*/
+        if (!V9990Active)return;
+        KanLetter = (KanLetter & 0x007E0) | ((int)(Value & 0x3F) << 11);
+        KanCount = 0;
+        return;
+    case 0x6F:
+        //if (!V9990Active)InitV9990();
         return;
 #endif // VDP_V9990
 
@@ -2886,9 +3000,6 @@ void OutZ80(word Port, byte Value)
         return;*/
 
     case 0x98: /* VDP Data */
-#ifdef VDP_V9990
-        //if(V9990Active)return;
-#endif // VDP_V9990
         VKey = 1;
 #ifdef TURBO_R
         UpdateVDPDelay();
@@ -2918,9 +3029,6 @@ void OutZ80(word Port, byte Value)
         return;
 
     case 0x99: /* VDP Address Latch */
-#ifdef VDP_V9990
-        //if (V9990Active)return;
-#endif // VDP_V9990
 #ifdef TURBO_R
         UpdateVDPDelay();
 #endif // TURBO_R
@@ -2980,9 +3088,6 @@ void OutZ80(word Port, byte Value)
         return;
 
     case 0x9A: /* VDP Palette Latch */
-#ifdef VDP_V9990
-        //if (V9990Active)return;
-#endif // VDP_V9990
 #ifdef TURBO_R
         UpdateVDPDelay();
 #endif // TURBO_R
@@ -3006,9 +3111,6 @@ void OutZ80(word Port, byte Value)
         return;
 
     case 0x9B: /* VDP Register Access */
-#ifdef VDP_V9990
-        //if (V9990Active)return;
-#endif // VDP_V9990
 #ifdef TURBO_R
         UpdateVDPDelay();
 #endif // TURBO_R
@@ -3528,6 +3630,7 @@ void MapROM(register word A, register byte V)
             SaveSRAMPAC = 1;
             return;
         }
+        return;
     }
 #else
   /* Drop out if no cartridge in that slot */
@@ -3535,11 +3638,21 @@ void MapROM(register word A, register byte V)
 #endif // TURBO_R
 
 #ifdef ALTSOUND
-    Write2212(A, V);
-    if (CheckSCC(A))IsSndRegUpd = IsSndRegUpd == 0xFF ? 0 : IsSndRegUpd + 1;
-    if (CartSpecial[I] != CART_READSCC)SCCOn[I] = SCCEnabled();
-    if (SCCOn[I])playSCC = 1;
-    //SCCOn[I] = SCCEnabled();
+	//Write2212(A, V);
+	//if (CheckSCC(A))IsSndRegUpd = IsSndRegUpd == 0xFF ? 0 : IsSndRegUpd + 1;
+	////if (CartSpecial[I] != CART_READSCC)SCCOn[I] = SCCEnabled();
+	//if ((AllowSCC[I]) && (CartSpecial[I] != CART_READSCC))SCCOn[I] = SCCEnabled();
+	//if (SCCOn[I])playSCC = 1;
+	////SCCOn[I] = SCCEnabled();
+
+    if (AllowSCC[I])
+    {
+        Write2212(A, V);
+        if (CheckSCC(A))IsSndRegUpd = IsSndRegUpd == 0xFF ? 0 : IsSndRegUpd + 1;
+        SCCOn[I] = SCCEnabled();
+        //if (CartSpecial[I] != CART_READSCC)SCCOn[I] = SCCEnabled();
+        if (SCCOn[I])playSCC = 1;
+    }
 #else
     /* SCC: enable/disable for no cart */
     if (!ROMData[I] && (A == 0x9000)) SCCOn[I] = (V == 0x3F) ? 1 : 0;
@@ -3994,6 +4107,61 @@ void MapROM(register word A, register byte V)
         }
         break;
 
+    case MAP_ASCII16Big: /*** ASCII 16kB cartridges over 2MB size ***/
+        /* Some hombrew ROMs has that size(9Finger Demo by NOP, MSX-Wings etc.))*/
+        /* https://nopmsx.nl/9fingers/ */
+        /* https://github.com/albs-br/msx-wings */
+        /* If switching pages... */
+        if ((A >= 0x6000) && (A < 0x8000) && ((V <= ROMMask[I] + 1) || !(A & 0x0FFF)))
+        {
+            J = (A & 0x1000) >> 11;
+            /* If selecting SRAM... */
+            if (V & (ROMMask[I] + 1))
+            {
+                /* Select SRAM page */
+                V = 0xFF;
+                P = SRAMData[I];
+                if (Verbose & 0x08)
+                    printf("ROM-MAPPER %c: 2kB SRAM at %d:%d:%04Xh\n", I + 'A', PS, SS, J * 0x2000 + 0x4000);
+            }
+            else
+            {
+                /* Select ROM page */
+                P = ROMData[I] + ((int)V << 14);
+                if (Verbose & 0x08)
+                    printf("ROM-MAPPER %c: 16kB ROM page #%d at %d:%d:%04Xh\n", I + 'A', V >> 1, PS, SS, J * 0x2000 + 0x4000);
+            }
+            /* If page was actually changed... */
+            if (V != ROMMapper[I][J])
+            {
+                MemMap[PS][SS][J + 2] = P;
+                MemMap[PS][SS][J + 3] = P + 0x2000;
+                ROMMapper[I][J] = V;
+                ROMMapper[I][J + 1] = V | 1;
+                /* Only update memory when cartridge's slot selected */
+                if ((PSL[(J >> 1) + 1] == PS) && (SSL[(J >> 1) + 1] == SS))
+                {
+                    RAM[J + 2] = P;
+                    RAM[J + 3] = P + 0x2000;
+                }
+            }
+            /* Done with page switch */
+            return;
+        }
+        /* Write to SRAM */
+        if ((A >= 0x8000) && (A < 0xC000) && (ROMMapper[I][2] == 0xFF))
+        {
+            P = RAM[A >> 13];
+            A &= 0x07FF;
+            P[A + 0x0800] = P[A + 0x1000] = P[A + 0x1800] =
+                P[A + 0x2000] = P[A + 0x2800] = P[A + 0x3000] =
+                P[A + 0x3800] = P[A] = V;
+            SaveSRAM[I] = 1;
+            /* Done with SRAM write */
+            return;
+        }
+        break;
+
     case MAP_HarryFox16:    /* Harryfox - Yuki no Maouhen (Microcabin) */
         if (((A >= 0x6000) && (A < 0x8000)) && ((V <= ROMMask[I] + 1) || !(A & 0x0FFF)))
         {
@@ -4247,7 +4415,7 @@ void MapROM(register word A, register byte V)
             printf("ROM-MAPPER %c: 8kB ROM page #%d at %d:%d:%04Xh\n", I + 'A', V, PS, SS, J * 0x2000 + 0x4000);
         return;
 
-    case MAP_SCCPLUS_2:     /* Konmai SCC Enhanced ROM. Snatcher, SD Snatcher, and Konami Game Collection./*
+    case MAP_SCCPLUS_2:     /* Konmai SCC Enhanced ROM. Snatcher, SD Snatcher, and Konami Game Collection. */
         /* Taken from BlueMSX. */
         if ((A | 1) == 0xBFFF)
         {
@@ -4301,7 +4469,6 @@ void MapROM(register word A, register byte V)
                 SetSCCEnhanced(0);
             }
             else SCCOn[I] = 0;
-            //}
             return;
         }
         return;
@@ -4756,9 +4923,6 @@ word LoopZ80(Z80 * R)
     if (V9990Active)
     {
         LoopZ80_V9990(R);
-        R->IRequest = IRQPending ? INT_IRQ : INT_NONE;
-        return(R->IRequest);
-        //return;
     }
 #endif // VDP_V9990
     static byte BFlag = 0;
@@ -4784,7 +4948,11 @@ word LoopZ80(Z80 * R)
 #ifdef TURBO_R
         if ((R->User) & 0x01)
         {
+#ifdef USE_OVERCLOCK
+            R->IPeriod <<= (1+overClockRatio);
+#else
             R->IPeriod <<= 1;
+#endif // USE_OVERCLOCK
 
             /* Add memory refresh wait if HRefresh. */
             R->ICount -= 29;
@@ -4806,6 +4974,8 @@ word LoopZ80(Z80 * R)
 #ifdef ALTPCM
         updatePCM();
 #endif // ALTPCM
+
+#ifndef AUDIO_SYNC
         switch (SoundSampRate)
         {
         case 0:
@@ -4818,6 +4988,7 @@ word LoopZ80(Z80 * R)
         default:
             break;
         }
+#endif // !AUDIO_SYNC
         if (AccurateAudioSync)WaitSyncLineStep();
 
         /* If first scanline of the screen... */
@@ -4914,7 +5085,12 @@ word LoopZ80(Z80 * R)
         LoopVDP();
 
         /* Refresh scanline, possibly with the overscan */
+#ifdef VDP_V9990
+        //if ((UCount >= 100) && Drawing && (!V9990Active) && (currScanLine < 230))
+        if ((UCount >= 100) && Drawing && ((!V9990Active) || (V9990Dual)) && (currScanLine < 230))
+#else
         if ((UCount >= 100) && Drawing && (currScanLine < 230))
+#endif // VDP_V9990
         {
             //Support games that supports both MSX2 and MSX2+(Shin Maou Golvellius(Golvellius II) etc).
             if ((MODEL(MSX_MSX2)) || !ModeYJK || (ScrMode < 7) || (ScrMode > 8))
@@ -5069,6 +5245,7 @@ word LoopZ80(Z80 * R)
     }
 #endif // TURBO_R
 
+#ifndef AUDIO_SYNC
 #ifdef ALTSOUND
     switch (SoundSampRate)
     {
@@ -5115,6 +5292,7 @@ word LoopZ80(Z80 * R)
         PlayAllSound(J);
     }
 #endif // ALTSOUND
+#endif // !AUDIO_SYNC
 
     /* Keyboard, sound, and other stuff always runs at line 192    */
     /* This way, it can't be shut off by overscan tricks (Maarten) */
@@ -6336,9 +6514,6 @@ void SetROMType(int Slot, int Value)
 
 void VDPSync()
 {
-#ifdef VDP_V9990
-    if (V9990Active)return;
-#endif // VDP_V9990
     int currScanTime = GetCurrScanLine();
     //while (ScanLine && (ScanLine<currScanTime))
     while (currScanLine && (currScanLine < currScanTime))
@@ -6438,6 +6613,10 @@ void UpdateTurboRTimer(int val)
     R800TimerCnt += val;
     PCMTimerCnt += val + 59;
     VDPIOTimerCnt += val;
+#ifdef AUDIO_SYNC
+    audioCycleCnt += val;
+#endif // AUDIO_SYNC
+
 }
 #endif  //TURBO_R
 
@@ -6803,54 +6982,78 @@ void V9990Out(register byte R, register byte V)
     register byte J;
     switch (R)
     {
-    //case 0:
-    //case 1:
+    case 0:
+        vdpV9990.VRAMWriteInt = (((uint)(V9990VDP[2] & 0x07) << 16) | ((uint)V9990VDP[1] << 8) | (uint)V) & 0x7FFFF;
+        break;
+    case 1:
+        vdpV9990.VRAMWriteInt = (((uint)(V9990VDP[2] & 0x07) << 16) | ((uint)V << 8) | (uint)V9990VDP[0]) & 0x7FFFF;
+        break;
     case 2:
-        //vdpV9990.VRAMWriteInt = (((int)(VDP[2]&0x07) << 16) | ((int)VDP[1] << 8) | (int)VDP[0])&vdpV9990.VRAMMask;
-        //vdpV9990.IncVRAMWrite = !(VDP[2] & 0x080) ? 1 : 0;
-        //vdpV9990.VRAMWriteInt = (((int)(V & 0x07) << 16) | ((int)VDP[1] << 8) | (int)VDP[0]) & vdpV9990.VRAMMask;
-        vdpV9990.VRAMWriteInt = (((int)(V & 0x07) << 16) | ((int)V9990VDP[1] << 8) | (int)V9990VDP[0]) & vdpV9990.VRAMMask;
+        vdpV9990.VRAMWriteInt = (((uint)(V & 0x07) << 16) | ((uint)V9990VDP[1] << 8) | (uint)V9990VDP[0]) & 0x7FFFF;
         vdpV9990.IncVRAMWrite = !(V & 0x080) ? 1 : 0;
-        return;
-    //case 3:
-    //case 4:
+        break;
+    case 3:
+        vdpV9990.VRAMReadInt = (((uint)(V9990VDP[5] & 0x07) << 16) | ((uint)V9990VDP[4] << 8) | (uint)V) & 0x7FFFF;
+        break;
+    case 4:
+        vdpV9990.VRAMReadInt = (((uint)(V9990VDP[5] & 0x07) << 16) | ((uint)V << 8) | (uint)V9990VDP[3]) & 0x7FFFF;
+        break;
     case 5:
-        //vdpV9990.VRAMReadInt = (((int)(VDP[5]&0x07) << 16) | ((int)VDP[4] << 8) | (int)VDP[3])&vdpV9990.VRAMMask;
-        //vdpV9990.IncVRAMRead = !(VDP[5] & 0x80) ? 1 : 0;
-        //vdpV9990.VRAMReadInt = (((int)(V & 0x07) << 16) | ((int)VDP[4] << 8) | (int)VDP[3]) & vdpV9990.VRAMMask;
-        vdpV9990.VRAMReadInt = (((int)(V & 0x07) << 16) | ((int)V9990VDP[4] << 8) | (int)V9990VDP[3]) & vdpV9990.VRAMMask;
+        vdpV9990.VRAMReadInt = (((uint)(V & 0x07) << 16) | ((uint)V9990VDP[4] << 8) | (uint)V9990VDP[3]) & 0x7FFFF;
         vdpV9990.IncVRAMRead = !(V & 0x80) ? 1 : 0;
-        return;
+        break;
     case 6:
-        return;
+        V9990VDP[6] = V;
+        SetScreenV9990();
+        break;
+    case 7:
+        V9990VDP[R] = V;
+        SetScreenV9990();
+        break;
     case 8:
-        //if (V & 0x080)
-        //{
-        //    if (!V9990Active)
-        //    {
-        //        vdpV9990.Active = 1;
-        //        V9990Active = 1;
-        //        for (J = 0; J < 64; J++)VDP[J] = 0;
-        //        for (J = 0; J < 16; J++)VDPStatus[J] = 0;
-        //        if (VDP[9] & 0x01)SetIRQ(INT_IE0);
-        //        else SetIRQ(~INT_IE0);
-        //        if (VDP[0] & 0x10) SetIRQ(INT_IE1);
-        //        else SetIRQ(~INT_IE1);
-
-        //        //if (VDP[9] & 0x01)SetIRQ(INT_IE0);
-        //        //else SetIRQ(~INT_IE0);
-        //        //if (VDP[9] & 0x02)SetIRQ(INT_IE1);
-        //        //else SetIRQ(~INT_IE1);
-        //    }
-        //}
-        return;
+        if (V & 0x20)V9990Dual = 1; /* Super Impose */
+        else V9990Dual &= 0xFE;
+        break;
+    case 13:
+        if (V & 0xC0)
+        {
+            V9990VDP[R] = V;
+            SetScreenV9990();
+        }
+        break;
+        /* For 17,18,21,22 Taken from WebMSX. */
+        /* https://webmsx.org/ */
+        /* Update V9990 Y Scroll H value and Display enable/disable  and Sprite enable/disable only at frame start. */
+        /* This fix many graphic glitches. Ghosts'n Goblins port from ASM Team , Golden Power Disc #12 etc. */
+    case 17:
+        V9KYScrollOff = (V9KYScrollOff & 0x1F00) | (unsigned int)V;
+        V9KYScrollOff2 = V9KScanLine > V9kFirstLine ? V9KYScrollOff - V9KcurrLine : V9KYScrollOff;
+        vdpV9990.pending |= 0x01;
+        break;
+    case 18:
+        if (!(V9990VDP[18] & 0x1F) && (V & 0x1F))vdpV9990.pending |= 0x01;
+        if ((V9990VDP[18] & 0x1F) && !(V & 0x1F))vdpV9990.pending |= 0x01;
+        break;
+    case 21:
+        V9KYScrollOffB = (V9KYScrollOffB & 0x0100) | (unsigned int)V;
+        V9KYScrollOffB2 = V9KScanLine > V9kFirstLine ? V9KYScrollOffB - V9KcurrLine : V9KYScrollOffB;
+        vdpV9990.pending |= 0x02;
+        break;
+    case 22:
+        if (!(V9990VDP[22] & 0x01) && (V & 0x01))vdpV9990.pending |= 0x02;
+        if ((V9990VDP[22] & 0x01) && !(V & 0x01))vdpV9990.pending |= 0x02;
+        break;
+    case 45:
+        V &= 0x1F;
+        break;
     case 52:
         //VDPDrawV9990(0x40);
         VDPDrawV9990(V);
-        return;
+        break;
     default:
         break;
     }
+    V9990VDP[R] = V;
 }
 
 word LoopZ80_V9990(Z80* R)
@@ -6863,360 +7066,302 @@ word LoopZ80_V9990(Z80* R)
     register int J;
 
     /* Flip HRefresh bit */
-    //vdpV9990.VDPStatus[5] ^= 0x20;
-    VDPStatus[2] ^= 0x20;
-    //VDPStatus[5] ^= 0x20;
-#ifdef TURBO_R
-    currScanLine = ScanLine - firstScanLine;
-
-    //SyncAudio();
-#endif // TURBO_R
+    V9990Port[5] ^= 0x20;
+    V9KcurrLine = V9KScanLine - V9kFirstLine;
 
   /* If HRefresh is now in progress... */
-    //if (!(VDPStatus[5] & 0x20))
-    if (!(VDPStatus[2] & 0x20))
-    //if (!(vdpV9990.VDPStatus[5] & 0x20))
+    if(!(V9990Port[5]&0x20))
     {
-        /* HRefresh takes most of the scanline */
-        R->IPeriod = !ScrMode || (ScrMode == MAXSCREEN + 1) ? (CPU_H240 + 5) : (CPU_H256 + 4);
-        if ((R->User) & 0x01)
+        if(!(V9KScanLine))
         {
-            R->IPeriod <<= 1;
-
-            /* Add memory refresh wait if HRefresh. */
-            R->ICount -= 29;
-            //R->IPeriod -= 29;
+            V9kFirstLine = 32;
+            
+            /* Update V9990 Y Scroll H value and Display enable/disable  and Sprite enable/disable only at frame start. */
+            /* Info from WebMSX. */
+            /* https://webmsx.org */
+            /* This fix some graphic glitches. Ghosts'n Goblins port from ASM Team etc. */
+            if(vdpV9990.pending & 0x01)V9KYScrollOff2 = V9KYScrollOff = ((unsigned int)(V9990VDP[18] & 0x1F) << 8) | (V9KYScrollOff & 0xFF);
+            if(vdpV9990.pending & 0x02)V9KYScrollOffB2 = V9KYScrollOffB = ((unsigned int)(V9990VDP[22] & 0x01) << 8) | (V9KYScrollOffB & 0xFF);
+            vdpV9990.pending = 0;
+            V9KVDP8Val = V9990VDP[8];
         }
-#ifdef ALTPCM
-        updatePCM();
-#endif // ALTPCM
-        switch (SoundSampRate)
-        {
-        case 0:
-            CalcAudio();
-            break;
-        case 1:
-            CalcAudio();
-            CalcAudio();
-            break;
-        default:
-            break;
-        }
-        if (AccurateAudioSync)WaitSyncLineStep();
-
-        /* If first scanline of the screen... */
-        if (!ScanLine)
-        {
-            //firstScanLine = PALVideo ? ((ScanLines212 ? 59 : 69) + VAdjust) : ((ScanLines212 ? 32 : 42) + VAdjust);
-            firstScanLine = (VDP[7]&0x08) ? 59 : 32;
-
-            delayedLine = 0;
-
-            if (!AccurateAudioSync)WaitSync();
-            //else CheckPALVideo();
-            if (IsShowFPS)CalcFPS();
-            DrawDiskLamp();
-            SetFirstLineTime();
-            checkAutoFrameSkip();
-
-            /* This fixes crashes when you close Nintendo 3DS's shell.*/
-            svcSleepThread(1);
-
-            /* If first scanline of the screen... */
-#ifdef LOG_ERROR
-            if (ErrorChar != NULL)ErrorLogUpdate();
-#endif // LOG_ERROR
-
-            /* Refresh display */
-            if (UCount >= 100) { UCount -= 100; RefreshScreen(); }
-            UCount += UPeriod;
-
-            /* Blinking for TEXT80 */
-            if (BCount) BCount--;
-            else
-            {
-                BFlag = !BFlag;
-                if (!VDP[13]) { XFGColor = FGColor; XBGColor = BGColor; }
-                else
-                {
-                    BCount = (BFlag ? VDP[13] & 0x0F : VDP[13] >> 4) * 10;
-                    if (BCount)
-                    {
-                        if (BFlag) { XFGColor = FGColor; XBGColor = BGColor; }
-                        else { XFGColor = VDP[12] >> 4; XBGColor = VDP[12] & 0x0F; }
-                    }
-                }
-            }
-        }
-        if (ScanLine == firstScanLine - 1)
+        //if (ScanLine == firstScanLine - 1)
+        if (V9KScanLine == V9kFirstLine - 1)
         {
             /* Reset VRefresh bit */
-            //vdpV9990.VDPStatus[5] &= 0xBF;
-            VDPStatus[2] &= 0xBF;
-            //VDPStatus[5] &= 0xBF;
+            V9990Port[5] &= 0xBF;
+
+            if ((V9990Port[6] & 0x01) && (V9990VDP[9] & 0x01))
+            {
+                V9990Port[6] &= 0xFE;
+                SetIRQV9K();
+            }
+            else V9990Port[6] &= 0xFE;
+
+            /* Interlace */
+            V9990Port[5] ^= 0x02;
         }
-        //else if (currScanLine == (ScanLines212 ? 212 : 192))
-        else if (currScanLine == 212)
+        else if (V9KcurrLine == 212)
         {
             /* Set VBlank bit, set VRefresh bit */
-            //vdpV9990.VDPStatus[5] |= 0x40;
-            VDPStatus[2] |= 0x40;
-            //VDPStatus[5] |= 0x40;
+            V9990Port[5] |= 0x40;
 
-            //if (!(vdpV9990.VDPStatus[6] & 0x01))
-            //{
-            //    vdpV9990.VDPStatus[6] |= 1;
-            //    if (vdpV9990.VDP[9] & 0x01)SetIRQ(INT_IE0);
-            //    else SetIRQ(~INT_IE0);
-            //}
-
-            //if (!(VDPStatus[6] & 0x01))
-            //{
-            //    VDPStatus[6] |= 1;
-            //    if (VDP[9] & 0x01)SetIRQ(INT_IE0);
-            //    else SetIRQ(~INT_IE0);
-            //}
-
-            if (!(VDPStatus[0] & 0x80))
+            if (!(V9990Port[6] & 0x01) && (V9990VDP[9]&0x01))
             {
-                VDPStatus[0] |= 0x80;
-
-                /* Generate VBlank interrupt */
-                if (VDP[1] & 0x20) SetIRQ(INT_IE0);
-                else SetIRQ(~INT_IE0);
-
-                //SetIRQ(INT_IE0);
+                V9990Port[6] |= 1;
+                SetIRQV9K();
             }
+            else V9990Port[6] |= 1;
         }
-
-        //if ((vdpV9990.VDPStatus[6] & 0x02) && (!(vdpV9990.VDP[9] & 0x02)))vdpV9990.VDPStatus[6] &= 0xFD;
-        //if ((vdpV9990.VDPStatus[1] & 0x01) && (!(vdpV9990.VDP[0] & 0x10)))vdpV9990.VDPStatus[1] &= 0xFE;
-        if ((VDPStatus[1] & 0x01) && (!(VDP[0] & 0x10)))VDPStatus[1] &= 0xFE;
-
-        //Update ScreenMode if only VDP command is inactive. This fixes some graphical glitches  such as Feedback(Techno Soft)'s intro etc.
-        if (!(VDPStatus[2] & 0x01))ScrMode = NewScrMode;
 
         /* Run V9938 engine */
-        //LoopVDP();
         LoopVDPV9990();
 
-        //VDPStatus[2] &= 0xFE;
-
         /* Refresh scanline, possibly with the overscan */
-        if ((UCount >= 100) && Drawing && (currScanLine < 230))
+        if (Drawing && (V9KcurrLine < 230))
         {
-            RefreshLineB2(currScanLine);
+            switch (V9KScrMode)
+            {
+            case 0:
+                RefreshLineP1AB(V9KcurrLine);
+                break;
+            case 1:
+                RefreshLineP2(V9KcurrLine);
+                break;
+            case 3:
+                switch (V9KType)
+                {
+                case 4:
+                    RefreshLineBYUV(V9KcurrLine);
+                    break;
+                case 6:
+                    RefreshLineBD16(V9KcurrLine);
+                    break;
+                case 8:
+                    RefreshLineBP6(V9KcurrLine);
+                    break;
+                case 9:
+                    RefreshLineB1(V9KcurrLine);
+                    break;
+                default:
+                    RefreshLineB1(V9KcurrLine);
+                    break;
+                }
+                break;
+            case 5:
+                switch (V9KType)
+                {
+                case 4:
+                    RefreshLineBYUV(V9KcurrLine);
+                    break;
+                case 6:
+                    RefreshLineBD16Wide(V9KcurrLine);
+                    break;
+                case 8:
+                    RefreshLineBP6Wide(V9KcurrLine);
+                    break;
+                case 9:
+                    RefreshLineB3(V9KcurrLine);
+                    break;
+                default:
+                    RefreshLineB3(V9KcurrLine);
+                    break;
+                }
+                break;
+            case 8:
+                RefreshLineB6(V9KcurrLine);
+                break;
+            default:
+                RefreshLineB1(V9KcurrLine);
+                break;
+            }
         }
         return;
-
-        ///* Return whatever interrupt is pending */
-        //R->IRequest = IRQPending ? INT_IRQ : INT_NONE;
-        //return(R->IRequest);
         }
 
     /*********************************/
     /* We come here for HBlanks only */
     /*********************************/
+        
+    V9KScanLine = V9KScanLine < 261 ? V9KScanLine + 1 : 0;
+    V9KcurrLine = V9KScanLine - V9kFirstLine;
 
-    /* HBlank takes HPeriod-HRefresh */
-    R->IPeriod = !ScrMode || (ScrMode == MAXSCREEN + 1) ? 68 : 57;
-    //if ((R->User) & 0x01)R->IPeriod <<= 1;
-
-    if ((R->User) & 0x01)
-    {
-        R->IPeriod <<= 1;
-        //R->IPeriod -= 29;
-        R->ICount -= 29;
-    }
-
-    /* New scanline */
-    ScanLine = ScanLine < ((VDP[7] & 0x08) ? 312 : 261) ? ScanLine + 1 : 0;
-
-    currScanLine = ScanLine - firstScanLine;
-
-    //if (!(vdpV9990.VDP[9] & 0x02))vdpV9990.VDPStatus[6] &= 0xFD;
-    if (!(VDP[0] & 0x10)) VDPStatus[1] &= 0xFE;
-
-    //if (!(VDP[9] & 0x02))VDPStatus[6] &= 0xFD;
-
-    /* If last scanline of VBlank, see if we need to wait more */
-    J = (V9990VDP[7] & 0x08) ? 313 : 262;
-    //J = (VDP[7] & 0x08) ? 313 : 262;
-    if (ScanLine >= J - 1)
-    {
-        J *= CPU_HPERIOD;
-        if (R->User & 0x01)
-        {
-            J <<= 1;
-            if (VPeriod * 2 > J) R->IPeriod += (VPeriod - J) * 2;
-        }
-        else
-        {
-            if (VPeriod > J) R->IPeriod += VPeriod - J;
-        }
-    }
-
-    /* If first scanline of the bottom border... */
+    ///* If first scanline of the bottom border... */
 
     /* If first scanline of VBlank... */
-    if (currScanLine == 212)Drawing = 0;
+    if (V9KcurrLine == 212)Drawing = 0;
 
     /* Drawing now... */
-    if (ScanLine == firstScanLine)Drawing = 1;
+    if (V9KScanLine == V9kFirstLine)Drawing = 1;
 
     /* Line coincidence processing */
-    //J = (((currScanLine + VScroll) & 0xFF) - VDP[19]) & 0xFF;
-    //J = ((currScanLine + VDP[17]) & 0xFF) - (VDP[10] | ((VDP[11] & 0x03) << 8));
-    //if (J == 1)
-    //if(((currScanLine+VDP[17]) & 0xFF)==(VDP[10]|((VDP[11]&0x03)<<8)))
-    if (((currScanLine + V9990VDP[17]) & 0xFF) == (V9990VDP[10] | ((V9990VDP[11] & 0x03) << 8)))
-     //if ((currScanLine & 0xFF)==1)
+    //if (((V9KcurrLine + V9990VDP[17]) & 0xFF) == (V9990VDP[10] | ((V9990VDP[11] & 0x03) << 8)))
+    if ((V9KcurrLine & 0xFF) == (V9990VDP[10] | ((V9990VDP[11] & 0x03) << 8)))
     {
-        //if (!(vdpV9990.VDPStatus[6] & 0x02))
-        //{
-        //    vdpV9990.VDPStatus[6] |= 2;
-        //    if (vdpV9990.VDP[9] & 0x02)SetIRQ(INT_IE1);
-        //    else SetIRQ(~INT_IE1);
-        //}
-
-        //if (!(VDPStatus[6] & 0x02))
-        //{
-        //    VDPStatus[6] |= 2;
-        //    if (VDP[9] & 0x02)SetIRQ(INT_IE1);
-        //    else SetIRQ(~INT_IE1);
-        //}
-
-        if (!(VDPStatus[1] & 0x01))
+        if (!(V9990Port[6] & 0x02))
         {
-            VDPStatus[1] |= 0x01;
-            /* Generate IE1 interrupt */
-            if (VDP[0] & 0x10) SetIRQ(INT_IE1);
-            else SetIRQ(~INT_IE1);
-            //SetIRQ(INT_IE1);
+            V9990Port[6] |= 2;
+            SetIRQV9K();
         }
-    }
-
-    switch (SoundSampRate)
-    {
-    case 0:
-        /* Additional audio calculation on no audio overtflow to get rid of audio underflow. CheckIsVoice() is true -> maybe overflow. */
-        if (((currScanLine & 0x03) == 0x03) || ((currScanLine & 0x05) == 0x05) || ((currScanLine & 0x07) == 0x07) || ((currScanLine & 0x09) == 0x09)
-            || (!CheckIsVoice()))CalcAudio();
-        audioCnt++;
-        if (audioCnt > 40)
-        {
-            audioCnt = 0;
-            IsSndRegUpd = 0;
-        }
-        break;
-    case 1:
-        if (((currScanLine & 0x07) != 0x07 && (currScanLine & 0x0F) != 0x0F) || (!CheckIsVoice()))CalcAudio();
-        audioCnt++;
-        if (audioCnt > 40)
-        {
-            audioCnt = 0;
-            IsSndRegUpd = 0;
-        }
-        break;
-    default:
-        break;
-    }
-    //CalcAudio();
-
-    /* Keyboard, sound, and other stuff always runs at line 192    */
-    /* This way, it can't be shut off by overscan tricks (Maarten) */
-    if (currScanLine == 192)
-    {
-        if (UseInterlace && InterlaceON)VDPStatus[2] ^= 0x02; /* for Interlace */
-
-        LoadCartAtStart();
-
-        /* Clear 5thSprite fields (wrong place to do it?) */
-        /* Without this error occurs (The Goblin(MSXdev23) etc.) */
-        //VDPStatus[0] = (VDPStatus[0] & ~0x40) | 0x1F;
-
-    /* Apply RAM-based cheats */
-        if (CheatsON && CheatCount) ApplyCheats();
-
-        /* Check joystick */
-        //JoyState=Joystick();
-
-        /* Check keyboard */
-        Keyboard();
-
-        /* Exit emulation if requested */
-        if (ExitNow) return(INT_QUIT);
-
-        if (currJoyMode[0] == JOY_ARKANOID)
-        {
-            PaddleState[0] = ArkanoidPaddle(0);
-        }
-
-        /* Check mouse in joystick port #1 */
-        if (JOYTYPE(0) >= JOY_MOUSTICK)
-        {
-            /* Get new mouse state */
-            MouState[0] = Mouse(0);
-            /* Merge mouse buttons into joystick buttons */
-            JoyState |= (MouState[0] >> 12) & 0x0030;
-            /* If mouse-as-joystick... */
-            if (JOYTYPE(0) == JOY_MOUSTICK)
-            {
-                J = MouState[0] & 0xFF;
-                JoyState |= J > OldMouseX[0] ? 0x0008 : J < OldMouseX[0] ? 0x0004 : 0;
-                OldMouseX[0] = J;
-                J = (MouState[0] >> 8) & 0xFF;
-                JoyState |= J > OldMouseY[0] ? 0x0002 : J < OldMouseY[0] ? 0x0001 : 0;
-                OldMouseY[0] = J;
-            }
-        }
-
-        /* Check mouse in joystick port #2 */
-        if (JOYTYPE(1) >= JOY_MOUSTICK)
-        {
-            /* Get new mouse state */
-            MouState[1] = Mouse(1);
-            /* Merge mouse buttons into joystick buttons */
-            JoyState |= (MouState[1] >> 4) & 0x3000;
-            /* If mouse-as-joystick... */
-            if (JOYTYPE(1) == JOY_MOUSTICK)
-            {
-                J = MouState[1] & 0xFF;
-                JoyState |= J > OldMouseX[1] ? 0x0800 : J < OldMouseX[1] ? 0x0400 : 0;
-                OldMouseX[1] = J;
-                J = (MouState[1] >> 8) & 0xFF;
-                JoyState |= J > OldMouseY[1] ? 0x0200 : J < OldMouseY[1] ? 0x0100 : 0;
-                OldMouseY[1] = J;
-            }
-        }
-
-        /* If any autofire options selected, run autofire counter */
-        if (OPTION(MSX_AUTOSPACE | MSX_AUTOFIREA | MSX_AUTOFIREB))
-            if ((ACount = (ACount + 1) & 0x07) > 3)
-            {
-                /* Autofire spacebar if needed */
-                if (OPTION(MSX_AUTOSPACE)) KBD_RES(' ');
-                /* Autofire FIRE-A if needed */
-                if (OPTION(MSX_AUTOFIREA)) JoyState &= ~(JST_FIREA | (JST_FIREA << 8));
-                /* Autofire FIRE-B if needed */
-                if (OPTION(MSX_AUTOFIREB)) JoyState &= ~(JST_FIREB | (JST_FIREB << 8));
-            }
     }
     return;
-
-    // /* Return whatever interrupt is pending */
-    //R->IRequest = IRQPending ? INT_IRQ : INT_NONE;
-    //return(R->IRequest);
     }
+
+
+void V9990SetPalette()
+{
+    int Idx = (V9990VDP[14]>>2)<<2;
+    byte r = V9KPal[Idx] & 0x1F;
+    byte g = V9KPal[Idx + 1] & 0x1F;
+    byte b =V9KPal[Idx + 2] & 0x1F;
+    V9990SetColor(Idx, r, g, b);
+    //SetColor(Idx >> 2, r, g, b);
+}
+
+word SetIRQV9K(void)
+{
+    if (V9990VDP[9] & V9990Port[6])IRQPending |= 0x08; else IRQPending &= ~0x08;
+    CPU.IRequest = (V9990VDP[9] & V9990Port[6]) ? INT_IRQ : INT_NONE;
+    return(CPU.IRequest);
+}
 
 
 void InitV9990()
 {
-    int J;
+    if (!UseV9990)return;
+    int J, VSize;
+    byte* P, P1;
     vdpV9990.Active = 1;
     V9990Active = 1;
-    for (J = 0; J < 64; J++)VDP[J] = 0;
-    for (J = 0; J < 16; J++)VDPStatus[J] = 0;
+
+    for (J = 0; J < 64; J++)V9990VDP[J] = 0;
+    for (J = 0; J < 16; J++)V9990Port[J] = 0;
+
+    for (J = 0; J < 256; J +=4) V9990SetColor(J, 0x1F, 0x1F, 0x1F);
+
+    InitXbuf();
+
+    VSize = 32 * 0x4000;
+    P = ResizeMemory(V9KVRAM, VSize);
+    for (J = 0; J < VSize; J += 1024)
+    {
+        //memset(P + J, 0x00, 512);
+        //memset(P + (J + 512), NORAM, 512);
+        memset(P + J, 0x00, 1024);
+    }
+    V9KVRAM = P;
+    
+    InitV9990CMD();
+    SetIRQV9K();
+}
+
+/* Change Screen Mode/Type */
+byte SetScreenV9990(void)
+{
+    byte V = V9990VDP[6];
+    if (!(V & 0xC0))    /* P1 Mode */
+    {
+        V9KScrMode = 0;
+        V9KImgWidth = 256;
+        V9KImgHeight = 2048;
+        V9KType = 1;
+        V9KPixelRes = 1;
+        //WideScreenOff();
+    }
+    else if (!(V & 0x80)) /* P2 Mode */
+    {
+        V9KScrMode = 1;
+        V9KImgWidth = 512;
+        V9KImgHeight = 2048;
+        V9KType = 1;
+        V9KPixelRes = 1;
+        //WideScreenOn();
+    }
+    else if ((V9990VDP[7] & 0x41) == 0x41)  /* B6 Mode(640x480) */
+    {
+        V9KScrMode = 8;
+        V9KImgWidth = 1024;
+        V9KImgHeight = 1024;
+        //WideScreenOn();
+    }
+    else if ((V & 0x30) == 0x00)  /* B1 Mode(256x212) */
+    {
+        V9KScrMode = 3;
+        V9KImgWidth = 256 << ((V & 0x0C) >> 2);
+        switch (V & 0x03)
+        {
+        case 1:
+            V9KType = 9;
+            V9KPixelRes = 1;
+            break;
+        case 2:
+            switch ((V9990VDP[13] >> 5) & 0xFF)
+            {
+            case 6:
+                V9KType = 4;
+                V9KPixelRes = 2;
+                break;
+            default:
+                V9KType = 8;
+                V9KPixelRes = 2;
+                break;
+            }
+            break;
+        case 3:
+            V9KType = 6;
+            V9KPixelRes = 3;
+            break;
+        default:
+            break;
+        }
+        V9KImgHeight = ((0x80000 >> V9KPixelRes)<<2) / V9KImgWidth;
+        //WideScreenOff();
+    }
+    else if ((V & 0x30) == 0x10)    /* B3 Mode(512x212) */
+    {
+        V9KScrMode = 5;
+        V9KImgWidth = 256 << ((V & 0x0C) >> 2);
+        switch (V & 0x03)
+        {
+        case 1:
+            V9KType = 9;
+            V9KPixelRes = 1;
+            break;
+        case 2:
+            switch ((V9990VDP[13] >> 5) & 0xFF)
+            {
+            case 6:
+                V9KType = 4;
+                V9KPixelRes = 2;
+                break;
+            default:
+                V9KType = 8;
+                V9KPixelRes = 2;
+                break;
+            }
+            break;
+        case 3:
+            V9KType = 6;
+            V9KPixelRes = 3;
+            break;
+        default:
+            break;
+        }
+        V9KImgHeight = ((0x80000 >> V9KPixelRes) << 2) / V9KImgWidth;
+        //WideScreenOn();
+    }
+    else if ((V & 0x20) == 0x20)
+    {
+        V9KScrMode = 8;
+        V9KImgWidth = 256 << ((V & 0x0C) >> 2);
+        V9KImgHeight = 4096 >> ((V & 0x0C) >> 2);
+        //WideScreenOn();
+    }
+    if (Verbose & 0x80)
+    {
+        printf("V9990 Screen Mode[%d]  Screen Type[%d]  Resolution[%d]\n", V9KScrMode, V9KType, V9KPixelRes);
+        printf("V9990 Image Width[%d]  V9990 Image Height[%d]\n", V9KImgWidth, V9KImgHeight);
+    }
 }
 #endif // VDP_V9990
 
@@ -7505,6 +7650,14 @@ int GuessROM(const byte * Buf, int Size)
     for (I = 0, J = 0; J < MAXMAPPERS; ++J)
         if (ROMCount[J] > ROMCount[I]) I = J;
 
+#ifdef _3DS
+    if ((I == MAP_ASCII16) && (Size>0x200000))
+    {
+        I = MAP_ASCII16Big;
+    }
+#endif // _3DS
+
+
     /* Return the most likely mapper type */
     return(I);
 }
@@ -7716,6 +7869,9 @@ int LoadCart(const char* FileName, int Slot, int Type)
                 if (fwrite(SRAMData[Slot], 1, 0x2000, F) != 0x2000) SaveSRAM[Slot] = 0;
                 break;
             case MAP_ASCII16:
+#ifdef _3DS
+            case MAP_ASCII16Big:
+#endif // _3DS
                 if (fwrite(SRAMData[Slot], 1, 0x0800, F) != 0x0800) SaveSRAM[Slot] = 0;
                 break;
             case MAP_GMASTER2:
@@ -7763,6 +7919,7 @@ int LoadCart(const char* FileName, int Slot, int Type)
         {
 #ifdef _3DS
             CartSpecial[Slot] = 0;
+            AllowSCC[Slot] = 1;
 #endif // _3DS
 
             /* Free memory if present */
@@ -8212,6 +8369,7 @@ int LoadCart(const char* FileName, int Slot, int Type)
         break;
     case MAP_ASCII16:
     case MAP_ASCII16_2:
+    case MAP_ASCII16Big:
     case MAP_MSX90:
         SetMegaROM(Slot, 0, 1, 0, 1);
         break;
@@ -8234,6 +8392,19 @@ int LoadCart(const char* FileName, int Slot, int Type)
     }
 
     SCCEnhanced = Type == MAP_SCCPLUS ? 1 : 0;
+
+    if ((Slot == 0) || (Slot == 1))
+    {
+        if ((Type == MAP_KONAMI5) || (Type == MAP_SCCPLUS) || (Type == MAP_SCCPLUS_2) || (Type == MAP_ESESCC) || (Type == MAP_WingWarr)
+            || (!ROMData[Slot]))
+        {
+            AllowSCC[Slot] = 1;
+        }
+        else AllowSCC[Slot] = 0;
+
+        if ((!ROMData[0]) && (AllowSCC[1]))AllowSCC[0] = 0;
+        if ((!ROMData[1]) && (AllowSCC[0]))AllowSCC[1] = 0;
+    }
 #endif // _3DS
 
     /* For Generic/16kB carts, set ROM pages as 0:1:N-2:N-1 */
@@ -8331,6 +8502,10 @@ int LoadCart(const char* FileName, int Slot, int Type)
                     memcpy(P + 0x1000, P, 0x1000);
                     break;
                 case MAP_ASCII16:
+#ifdef _3DS
+                case MAP_ASCII16Big:
+#endif // _3DS
+
                     memcpy(P + 0x0800, P, 0x0800);
                     memcpy(P + 0x1000, P, 0x0800);
                     memcpy(P + 0x1800, P, 0x0800);
