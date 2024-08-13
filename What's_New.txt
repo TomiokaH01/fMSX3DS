@@ -1,3 +1,35 @@
+v1.4
+-Add support for V9990 and its clones(GFX9000 etc).
+ You can use it with chose "[Option]" item in the fMSX3DS system menu, and enable the "Use V9990" option item.
+ Good news for New3DS user. I tested almost all of homebrew games/apps that use V9990 and all of them works full speed at 60fps on New3DS.
+ As to Old3DS, it has mixed results depends on homebrew. Some homebrew runs full speed even on Old3DS, but some homebrew runs too slow.
+
+-Fixed konami SCC sound issue with miss detect of SCC and SCC+ in some cae
+ (Project Melancholia English translation patched SD Snatcher, TINY SLOT CHECKER etc.).
+
+-Add new option item "Read SCC Plus Wave". Some games/apps requires this option item on to enable SCC sound.
+ (GEM(GameBoy emulator for MSXTurboR + V9990) etc).
+
+-Update "emu8950.c" by Mitsutaka Okazaki to latest version.
+
+-Add support fr new firmware(0.07.08) for MSX0.
+
+-Add support for ASCII16 ROM Mapper with 4MB size(9Finger Demo by NOP, MSX in a Row!, MSX-Wings etc).
+
+-Adjust posions of "No Scale" and "Keep Aspect" screen strech Mode.
+
+-Fixed bug that you cann't assign ":" key to 3DS's button in keyconfig. 
+
+-Add ability to change RAM size of MSX.
+ You can do that with choosing "[Option]" item in the fMSX3DS system menu, and change value of "<Emulation Option>/RAM Size".
+ Caution that you must use same RAM size when you load saved state.
+
+-Add ability to overclock R800 CPU for MSXTurboR.
+ You can use it with choosing "[OverClockR800(Unsafe)]" item in the fMSX3DS system menu, and select overclock rate.
+ Caution that it's unsafe, and many games go wrong with overclock.
+
+-Add suggestion message to restart when you change printer port.
+
 v1.31
 Immediate update for bug fix.
 -Fixed bug that fMSX3DS can't boot if you setting the emulator to boot at MSXTurboR mode on startup with missing MSXTurboR BIOS files.
