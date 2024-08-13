@@ -9,9 +9,12 @@
 /* Currently i get confused "_3DS" and "TURBO_R". You need define both of them.*/
 /* TODO: "_3DS" only covers Nintendo 3DS(libctru) related code only. */
 #define _MSX0
-//#define VDP_V9990
+#define VDP_V9990
+#define USE_OVERCLOCK
+//#define AUDIO_SYNC
 //#define HDD_NEXTOR
 //#define	HDD_IDE
+//#define MEMORY_CURSOR_POS		/* Memory position of the cursor in system menu. */
 
 //#define DEBUG_ENABLE
 #define LOG_ERROR

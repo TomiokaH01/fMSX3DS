@@ -1367,6 +1367,7 @@ void RefreshLine4(register byte Y)
             BC = XPal[K & 0x0F];
             K = ChrGen[(I + J) & ChrGenM];
 
+            /* If no sprite prsent, skip check of R0 - R7. It improve speed a bit. */
             if (!(sprDraw & (1 << X)))
             {
                 PL[0] = ((K & 0x80) ? FC : BC) | (((K & 0x40) ? FC : BC)<<16);
@@ -1472,6 +1473,7 @@ void RefreshLine5(register byte Y)
                     //T += -128;
                 }
 
+                /* If no sprite prsent, skip check of R[0]-R[7]. It improve speed a bit. */
                 if (!(sprDraw & (1 << X)))
                 {
                     PL[0] = (XPal[T[0] >> 4]) | (XPal[T[0] & 0x0F])<<16;

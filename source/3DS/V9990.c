@@ -174,6 +174,8 @@ static void VDPPSetLXBD16_512(register int DA, register int SX,
 
 static int GetVdpTimingValue(register int* timing_values);
 
+void ReportVdpCommandV9990(register byte Op);
+
 static void LmmcEngineV9990(void);
 static void LmmvEngineV9990(void);
 static void LmcmEngineV9990(void);
@@ -222,6 +224,7 @@ static int bmlx_timing[16] = { 109, 235, 184, 109,
                                 57, 220, 101,  57,
                                 55,  60,  56,  55,
                                 85,  99,  87,  85 };
+
 
 /** VDPpointBP4 **********************************************/
 /** Get a pixel on BP4 Mode                                 **/
@@ -536,6 +539,9 @@ byte VDPDrawV9990(byte Op)
     MMCV9990.LO = V9990VDP[45] & 0x1F;
     MMCV9990.RectPos = 0;
 
+    if (Verbose & 0x80)
+        ReportVdpCommandV9990(Op);
+
     switch (Op >> 4)
     {
     case CMV9990_STOP:
@@ -651,7 +657,6 @@ void LmmcEngineV9990(void)
 {
     register int DY = MMCV9990.DY;
     if ((V9990Port[5] & 0x80) != 0x80)
-    //if ((V9990Port[5] & 0x01))
     {
         if (V9KScrMode == 0)
         {
@@ -709,13 +714,11 @@ void LmmcEngineV9990(void)
             }
 
             V9990Port[5] |= 0x80;
-            //if (!--MMCV9990.ANX || ((MMCV9990.ADX += MMCV9990.TX) & MMCV9990.MX))
             MMCV9990.ADX += MMCV9990.TX;
-            MMCV9990.ADX = MMCV9990.ADX & (MMCV9990.MX - 1);
+            MMCV9990.ADX = MMCV9990.ADX & (V9KImgWidth - 1);
             MMCV9990.ASX++;
             if (!(--MMCV9990.ANX))
             {
-                //if (!(--MMCV9990.NY & 1023) || (MMCV9990.DY += MMCV9990.TY) == -1)
                 DY += MMCV9990.TY;
                 if (!(--MMCV9990.NY) || (MMCV9990.DY += MMCV9990.TY) == -1)
                 {
@@ -729,14 +732,12 @@ void LmmcEngineV9990(void)
                 }
                 else
                 {
-                    //if (Verbose & 0x80)printf("V9990 LMMC Command NY[%02Xh]\n",MMCV9990.NY);
                     MMCV9990.ADX = MMCV9990.DX;
                     MMCV9990.ANX = MMCV9990.NX;
                 }
             }
             if (!(V9990Port[5] & 0x01))break;
         }
-        //VdpOpsCntV9990 -= 60;
     }
 }
 
@@ -1003,7 +1004,7 @@ void LmmmEngineV9990(void)
     register int ADX = MMCV9990.ADX;
     register int ANX = MMCV9990.ANX;
     register byte LO = MMCV9990.LO;
-    register int cnt, i, j;
+    register int cnt;
     register int delta;
 
     if (V9KScrMode == 0)
@@ -2205,6 +2206,36 @@ void InitV9990CMD(void)
 {
     VdpEngineV9990 = 0;
     V9990PrevData = -1;
+}
+
+
+/** ReportVdpCommand() ***************************************/
+/** Report VDP Command to be executed                       **/
+/*************************************************************/
+void ReportVdpCommandV9990(register byte Op)
+{
+    static char* Ops[16] =
+    {
+      "NULL ","NOR ","EXD  ","NOTS ","EXS ","NOTD ","XOR ","NAMD ",
+      "AND ","EQV ","D ","NEXS","S","NEXD ","OR ","ID "
+    };
+    static char* Commands[16] =
+    {
+      " STOP"," LMMC"," LMMV"," LMCM","LMMM"," CMMC"," CMMK"," CMMM",
+      " BMXL"," BMLX"," BMLL"," LINE"," SERCH"," POINT"," PSET"," ADVANCE"
+    };
+    register byte CL, CM, LO;
+    register int FC;
+    /* Fetch arguments */
+    FC = !V9KScrMode ? (V9990VDP[37] & 0x02 ? ((V9990VDP[49] << 8) | V9990VDP[49]) : ((V9990VDP[48] << 8) | V9990VDP[48])) : (V9990VDP[48] << 8) | V9990VDP[49];
+    CM = Op >> 4;
+    LO = Op & 0x0F;
+
+    printf("V9938: Opcode %02Xh %s-%s (%d,%d)->(%d,%d),%d [%d,%d]\n",
+        Op, Commands[CM], Ops[LO],
+        MMCV9990.SX, MMCV9990.SY, MMCV9990.DX, MMCV9990.DY, FC, V9990VDP[44] & 0x04 ? -MMCV9990.NX : MMCV9990.NX,
+        V9990VDP[44] & 0x08 ? -MMCV9990.NY : MMCV9990.NY
+        );
 }
 
 

@@ -55,6 +55,7 @@ u32 Color_Folder0 = C2D_Color32(240, 234, 79, 255);
 u32 Color_Folder1 = C2D_Color32(223, 186, 74, 255);
 u32 Color_Transp = C2D_Color32(255, 255, 255, 30);
 
+static int sysmenuIdx = 0;
 static int menucnt = 0;
 static std::string currdir = "/";
 std::vector<std::string> dirstring;
@@ -104,6 +105,7 @@ unsigned char UseRCFilter = 0;
 unsigned char UseFIRFilter = 0;
 unsigned char SoundSampRate = 0;
 unsigned char Use8950TurboR = 0;
+unsigned char ReadSCCPlus = 0;
 char IsDebug = 0;
 int CartSpecial[2] = { 0,0 };
 unsigned char IsStartLoadFile = 1;
@@ -111,12 +113,15 @@ int IPSPatchSize = 0;
 unsigned char* IPSPatchBuf;
 unsigned char ScreenFilter;
 unsigned char TurboNow = 0;
+#ifdef MEMORY_CURSOR_POS
+unsigned char MemorySysMenupos = 0;
+#endif // MEMORY_CURSOR_POS
 int TextDelay = 100;
 int fpsval;
 unsigned char NewPSGType = 0;
 unsigned char NewSoundChs = 0;
 unsigned char NewMSX_Mode = 2;
-unsigned char TurboRFix = 0;
+unsigned char NewRAMSize = 3;
 //unsigned char NewMSXDOS = 0;
 #ifdef USE_3D
 unsigned char OldStereo3DMode = 0;
@@ -151,6 +156,10 @@ std::vector<char*> OptionNum = { "0","1","2","3","4","5","6","7","8","9","10" };
 std::vector<char*> OptionNum3 = { "0","1","2","3" };
 std::vector<char*> OptionNum4 = { "0","1","2","3","4" };
 std::vector<char*> OptionNum15 = { "0(Silent)","1","2","3","4","5","6","7","8","9","10(Normal)" ,"11", "12", "13", "14", "15(Maximum)"};
+std::vector<char*> OptionRAMSize = { "64K", "128K", "256K", "512K", "1MB", "2MB" };
+#ifdef USE_OVERCLOCK
+std::vector<char*> OptionOverClock = { "0(None)","x2(Unsafe)", "x4(Unsafe)" };
+#endif // USE_OVERCLOCK
 std::vector<char*> OptionMSXType = {"MSX","MSX2","MSX2Plus","MSXTurboR"};
 std::vector<char*> OptinJoyPort = { "None", "JoyStick","Mouse as Joystick","Mouse","Arkanoid","TouchPad" };
 std::vector<char*> OptionPrinter = {"None", "PrintToFile", "VoiceBox", "+PCM", "COVOX"};
@@ -177,12 +186,16 @@ static std::vector<OptionItem> optionItem =
 	{"[Back]", 0,0,0,OptionNull},
 	{"<Emulation Option>",0,0,0,OptionNull},
 	{"MSX Model",2,2,2,OptionMSXType},
+#ifdef VDP_V9990
+	{"Use V9990",0,0,0,OptionOffOn},
+#endif // VDP_V9990
 	{"Machine Region",0,0,0,OptionRegion},
 	{"Force Japanese BIOS",0,0,0,OptionOffOn},
 	{"C-BIOS Region",2,2,2,OptionCBIOSReg},
 	{"Force C-BIOS",0,0,0,OptionOffOn},
 	{"Skip MSX2 Plus boot screen",0,0,0,OptionOffOn},
 	{"Keyboad Region",0,0,0,OptionLanguage},
+	{"RAM Size",3,3,3,OptionRAMSize},
 	{"Frame Skip",3,2,3,OptionUperiod},
 	{"Auto Frame Skip",0,1,0,OptionOffOn},
 	{"Accurate AudioSync",1,1,1,OptionOffOn},
@@ -206,6 +219,9 @@ static std::vector<OptionItem> optionItem =
 	{"Menu Language",2,2,2,OptionLanguage},
 	{"Scroll Text",1,1,1,OptionOffOn},
 	{"Menu select speed",5,5,5,OptionNum},
+#ifdef MEMORY_CURSOR_POS
+	{"Memory systemmenu cursor",0,0,0,OptionOffOn },
+#endif // MEMORY_CURSOR_POS
 	{"ShowFPS",0,0,0,OptionOffOn},
 	{"New3DS Boost",0,1,0,OptionOnOff},
 	{"",0,0,0,OptionNull},
@@ -215,6 +231,7 @@ static std::vector<OptionItem> optionItem =
 	{"Use Y8950 on MSXTurboR",0,0,0,OptionOffOn},
 	{"PSG Chip Type",0,0,0,OptionPSG},
 	{"Sound Volume",10,10,10,OptionNum15},
+	{"Read SCC Plus Wave",0,0,0,OptionOffOn},
 	{"",0,0,0,OptionNull},
 	{"<Input/Output Hardware Option>",0,0,0,OptionNull},
 	{"JoyPort A",1,1,1,OptinJoyPort},
@@ -298,7 +315,8 @@ static std::vector<KeyMenuItem> keyValueItem =
 	,{"a",'a'},{"b",'b'},{"c",'c'},{"d",'d'},{"e",'e'},{"f",'f'},{"g",'g'},{"h",'h'},{"i",'i'},{"j",'j'}
 	,{"k",'k'},{"l",'l'},{"m",'m'},{"n",'n'},{"o",'o'},{"p",'p'},{"q",'q'},{"r",'r'},{"s",'s'},{"t",'t'}
 	,{"u",'u'},{"v",'v'},{"w",'w'},{"x",'x'},{"y",'y'},{"z",'z'},{"-",'-'},{"^",'^'},{"YEN",'\\'},{"@",'@'},{"[",'['}
-	,{";",';'},{":",':'},{"]",']'},{",",','},{".",'.'},{"/",'/'},{"_",'_'},{"[Default Value]",-1}
+		,{";",';'},{":",'"'},{"]",']'},{",",','},{".",'.'},{"/",'/'},{"_",'_'},{"[Default Value]",-1}
+//	,{";",';'},{":",':'},{"]",']'},{",",','},{".",'.'},{"/",'/'},{"_",'_'},{"[Default Value]",-1}
 };
 
 static std::vector<std::string> RapidMenuVec =
@@ -349,9 +367,6 @@ static std::vector<std::string> menuItem =
 #ifdef HDD_NEXTOR
 	"[Load HardDisk]",
 #endif // HDD_NEXTOR
-#ifdef VDP_V9990
-	"[Use V9990]",
-#endif // VDP_V9990
 	"",
 	"<Cassette Tape Files>",
 	"[Load Cassette Tape]",
@@ -366,6 +381,7 @@ static std::vector<std::string> menuItem =
 	"[Save Screen Shot]",
 	"[Load Reference Image]",
 	"[Fast Forward]",
+	"[OverClockR800(Unsafe)]",
 	"[Cheat]",
 #ifdef DEBUG_ENABLE
 		"[Debug]",
@@ -526,8 +542,9 @@ void Init3DS()
 	//debugFile = fopen("/FMSX3DS/DebugLog.txt", "w");
 	//debugFile = open_memstream(&debugBuf, &debugBufSize);
 	debugFile = fmemopen(debugBuf, 0x10000, "r+");
-	//Verbose = 0x2C;	/*  0x02:VDP Command,  0x04:Disk IO,  0x8:MAP ROM,  0x20:IO Port,  0x40:MSXTurboR  */
-	Verbose = 0x20;
+	//Verbose = 0x2C;	/*  0x02:VDP Command,  0x04:Disk IO,  0x8:MAP ROM,  0x20:IO Port,  0x40:MSXTurboR */
+	//Verbose = 0x20;
+	Verbose = 0xA0;
 	//Verbose = 0x44;
 	//Verbose = 9;
 #endif // DEBUG_LOG
@@ -3097,7 +3114,11 @@ void systemMenu()
 	textbuf = C2D_TextBufNew(4096);
 	bool needRedraw = true;
 	int menuItemCount = menuItem.size();
-	int selectIndex = 0;
+#ifdef MEMORY_CURSOR_POS
+	if (!MemorySysMenupos)sysmenuIdx = 0;
+#else
+	sysmenuIdx = 0;
+#endif // MEMORY_CURSOR_POS
 	int startid = 0;
 	while (aptMainLoop())
 	{
@@ -3112,7 +3133,7 @@ void systemMenu()
 			{
 				if (i >= menuItemCount)break;
 				int idx = std::max(0, i - startid);
-				if (i == selectIndex)
+				if (i == sysmenuIdx)
 				{
 					C2D_DrawRectSolid(textSize, textSize * (float)(idx + 1), 1.0f, 320 - textSize * 2, textSize, Color_White);
 					DrawTextTranslate(menuItem[i].c_str(), textStartPos, textSize * (float)(idx + 1), 1.0f, fontSize, fontSize, Color_Select);
@@ -3122,7 +3143,7 @@ void systemMenu()
 					DrawTextTranslate(menuItem[i].c_str(), textStartPos, textSize * (float)(idx + 1), 1.0f, fontSize, fontSize, Color_White);
 				}
 			}
-			if (selectIndex >= 0 && selectIndex < menuItemCount)
+			if (sysmenuIdx >= 0 && sysmenuIdx < menuItemCount)
 			{
 				DrawOKButton("Select");
 			}
@@ -3143,13 +3164,13 @@ void systemMenu()
 		bool IsAPress = false, IsLPress = false, IsRPress = false;
 		if (kHeld & KEY_UP)
 		{
-			GetMovedMenuIndex(selectIndex, startid, -1, NULL);
+			GetMovedMenuIndex(sysmenuIdx, startid, -1, NULL);
 			SDL_Delay(TextDelay);
 			needRedraw = true;
 		}
 		if (kHeld & KEY_DOWN)
 		{
-			GetMovedMenuIndex(selectIndex, startid, 1, menuItemCount - 1);
+			GetMovedMenuIndex(sysmenuIdx, startid, 1, menuItemCount - 1);
 			SDL_Delay(TextDelay);
 			needRedraw = true;
 		}
@@ -3172,7 +3193,7 @@ void systemMenu()
 		{
 			if (py > textSize && py < 240 - textSize && px>textStartPos && px < textEndPos)
 			{
-				selectIndex = (py / textSize) + startid - 1;
+				sysmenuIdx = (py / textSize) + startid - 1;
 				SDL_Delay(TextDelay);
 				needRedraw = true;
 			}
@@ -3187,14 +3208,14 @@ void systemMenu()
 		}
 		oldtp.px = px;
 		oldtp.py = py;
-		if (IsAPress && selectIndex >= 0 && selectIndex < menuItemCount)
+		if (IsAPress && sysmenuIdx >= 0 && sysmenuIdx < menuItemCount)
 		{
-			if (selectIndex == 0)
+			if (sysmenuIdx == 0)
 			{
 				SDL_Delay(100);
 				return;
 			}
-			std::string selectmenu = menuItem[selectIndex];
+			std::string selectmenu = menuItem[sysmenuIdx];
 			if (selectmenu == "[Back]")
 			{
 				SDL_Delay(100);
@@ -3313,15 +3334,6 @@ void systemMenu()
 				//LoadPatchedNEXTOR();
 			}
 #endif // HDD_NEXTOR
-#ifdef VDP_V9990
-			else if (selectmenu == "[Use V9990]")
-			{
-				V9990Active = 1;
-				InitV9990;
-				ResetMSX(Mode, RAMPages, VRAMPages);
-			 }
-#endif // VDP_V9990
-
 			else if (selectmenu == "[Load Cassette Tape]")
 			{
 				BrowseROM(0, BROWSE_TAPE);
@@ -3553,6 +3565,7 @@ void systemMenu()
 			{
 				//LoadSCCPLUS(0);
 				LoadCart("SCCPLUS", 0, MAP_SCCPLUS_2);
+				if (ReadSCCPlus)CartSpecial[0] = CART_READSCC;
 				ResetMSX(Mode, RAMPages, VRAMPages);
 				return;
 			}
@@ -3562,6 +3575,12 @@ void systemMenu()
 				ResetMSX(Mode, RAMPages, VRAMPages);
 				return;
 			}
+#ifdef USE_OVERCLOCK
+			else if (selectmenu == "[OverClockR800(Unsafe)]")
+			{
+				overClockRatio = BrowseInt("OverClock Rate", OptionOverClock, overClockRatio, 0, false);
+			}
+#endif // USE_OVERCLOCK
 			else if (selectmenu == "[Fast Forward]")
 			{
 			if (BrowseOK("Do you want to enter fast forward mode?", NULL))
@@ -3664,13 +3683,13 @@ void systemMenu()
 		}
 		if (IsLPress)
 		{
-			GetMovedMenuIndex(selectIndex, startid, -(textColumn - 2), NULL);
+			GetMovedMenuIndex(sysmenuIdx, startid, -(textColumn - 2), NULL);
 			SDL_Delay(TextDelay);
 			needRedraw = true;
 		}
 		if (IsRPress)
 		{
-			GetMovedMenuIndex(selectIndex, startid, (textColumn - 2), menuItemCount - 1);
+			GetMovedMenuIndex(sysmenuIdx, startid, (textColumn - 2), menuItemCount - 1);
 			SDL_Delay(TextDelay);
 			needRedraw = true;
 		}
@@ -3706,40 +3725,40 @@ void BrowseReset()
 		return;
 	case 1:
 		IsHardReset = 1;
-		ResetMSX((Mode & ~MSX_MODEL) | MSX_MSXTR, RAMPages, VRAMPages);
+		ResetMSX((Mode & ~MSX_MODEL) | MSX_MSXTR, 4<<NewRAMSize, VRAMPages);
 		return;
 	case 2:
 		IsHardReset = 0;
-		ResetMSX((Mode & ~MSX_MODEL) | MSX_MSXTR, RAMPages, VRAMPages);
+		ResetMSX((Mode & ~MSX_MODEL) | MSX_MSXTR, 4 << NewRAMSize, VRAMPages);
 		return;
 	case 3:
 		IsHardReset = 1;
-		ResetMSX((Mode & ~MSX_MODEL) | MSX_MSX2P, RAMPages, VRAMPages);
+		ResetMSX((Mode & ~MSX_MODEL) | MSX_MSX2P, 4 << NewRAMSize, VRAMPages);
 		//ResetSound();
 		return;
 	case 4:
 		IsHardReset = 0;
-		ResetMSX((Mode & ~MSX_MODEL) | MSX_MSX2P, RAMPages, VRAMPages);
+		ResetMSX((Mode & ~MSX_MODEL) | MSX_MSX2P, 4 << NewRAMSize, VRAMPages);
 		//ResetSound();
 		return;
 	case 5:
 		IsHardReset = 1;
-		ResetMSX((Mode & ~MSX_MODEL) | MSX_MSX2, RAMPages, VRAMPages);
+		ResetMSX((Mode & ~MSX_MODEL) | MSX_MSX2, 4 << NewRAMSize, VRAMPages);
 		//ResetSound();
 		return;
 	case 6:
 		IsHardReset = 0;
-		ResetMSX((Mode & ~MSX_MODEL) | MSX_MSX2, RAMPages, VRAMPages);
+		ResetMSX((Mode & ~MSX_MODEL) | MSX_MSX2, 4 << NewRAMSize, VRAMPages);
 		//ResetSound();
 		return;
 	case 7:
 		IsHardReset = 1;
-		ResetMSX((Mode & ~MSX_MODEL) | MSX_MSX1, RAMPages, VRAMPages);
+		ResetMSX((Mode & ~MSX_MODEL) | MSX_MSX1, 4 << NewRAMSize, VRAMPages);
 		//ResetSound();
 		return;
 	case 8:
 		IsHardReset = 0;
-		ResetMSX((Mode & ~MSX_MODEL) | MSX_MSX1, RAMPages, VRAMPages);
+		ResetMSX((Mode & ~MSX_MODEL) | MSX_MSX1, 4 << NewRAMSize, VRAMPages);
 		//ResetSound();
 		return;
 
@@ -3812,6 +3831,11 @@ void DebugMenu()
 	{
 		"[Back]",
 		"[Show VDP Register]",
+#ifdef VDP_V9990
+		"[Show V9990 VDP Rgister]",
+		"[Show V9990 VDP Port]",
+		"[V9990 Status Reset]",
+#endif // VDP_V9990
 		"[Show Disk Info]",
 		"[Set VDP Status Value]",
 		"[Set VDP value]",
@@ -3988,6 +4012,52 @@ void DebugMenu()
 				ExitConsole();
 				break;
 			}
+#ifdef VDP_V9990
+			else if(selectmenu == "[Show V9990 VDP Rgister]")
+			{
+				gfxInitDefault();
+				consoleInit(GFX_BOTTOM, _NULL);
+				IsInConsole = true;
+				for (int i = 0; i < 28; i++)
+				{
+					printf("V9990VDP["); printf(std::to_string(i).c_str()); printf("]: ");
+					printf(std::to_string(V9990VDP[i]).c_str());
+					if (i & 1)printf("\n");
+					else printf("  ");
+				}
+				for (int i = 32; i < 55; i++)
+				{
+					printf("V9990VDP["); printf(std::to_string(i).c_str()); printf("]: ");
+					printf(std::to_string(V9990VDP[i]).c_str());
+					if (i & 1)printf("\n");
+					else printf("  ");
+				}
+				printf("Screen Mode:");
+				printf(std::to_string(V9KScrMode).c_str()); printf("\n");
+				ExitConsole();
+				break;
+			}
+			else if(selectmenu == "[Show V9990 VDP Port]")
+			{
+				gfxInitDefault();
+				consoleInit(GFX_BOTTOM, _NULL);
+				IsInConsole = true;
+				for (int i = 0; i < 16; i++)
+				{
+					printf("V9990Port["); printf(std::to_string(i).c_str()); printf("]: ");
+					printf(std::to_string(V9990Port[i]).c_str());
+					if (i & 1)printf("\n");
+					else printf("  ");
+				}
+				ExitConsole();
+				break;
+			}
+			else if (selectmenu== "[V9990 Status Reset]")
+			{
+				ResetV9990VDPRegister();
+				return;
+			}
+#endif // VDP_V9990
 			else if(selectmenu== "[Set VDP Status Value]")
 			{
 				std::vector<char*> vdpstvec;
@@ -4861,6 +4931,13 @@ void LoadOption(bool IsInit)
 		NewMSX_Mode = Mode & MSX_MODEL;
 		NewPSGType = PSGType;
 		NewSoundChs = SoundChannels;
+		NewRAMSize = 0;
+		int ramsz = 4;
+		while (RAMPages>ramsz)
+		{
+			ramsz <<= 1;
+			NewRAMSize++;
+		}
 	}
 	IsShowFPS = optionItem[optionMap["ShowFPS"]].currentIdx;
 	if (NewMSX_Mode != optionItem[optionMap["MSX Model"]].currentIdx)
@@ -4868,11 +4945,28 @@ void LoadOption(bool IsInit)
 		NewMSX_Mode = optionItem[optionMap["MSX Model"]].currentIdx;
 		messageType = 2;
 	}
+	if (NewRAMSize != optionItem[optionMap["RAM Size"]].currentIdx)
+	{
+		NewRAMSize = optionItem[optionMap["RAM Size"]].currentIdx;
+		messageType = 1;
+	}
+#ifdef VDP_V9990
+	UseV9990 = optionItem[optionMap["Use V9990"]].currentIdx;
+#endif // VDP_V9990
+
 	if (IsWide != optionItem[optionMap["800px wide mode"]].currentIdx)
 	{
 		if (optionItem[optionMap["800px wide mode"]].currentIdx == 1)
 		{
 			AllowWide = true;
+#ifdef VDP_V9990
+			if (V9990Active)
+			{
+				if ((V9KScrMode == 1) || (V9KScrMode > 3))SetupWideScreen(true);
+				else SetupWideScreen(false);
+			}
+			else
+#endif // VDP_V9990
 			if ((ScrMode == 6) || ((ScrMode == 7) && !ModeYJK) || (ScrMode == MAXSCREEN + 1))
 			{
 				SetupWideScreen(true);
@@ -4963,6 +5057,9 @@ void LoadOption(bool IsInit)
 	IsStartLoadFile = optionItem[optionMap["Load  a file when Startup"]].currentIdx;
 	menuLanguage = optionItem[optionMap["Menu Language"]].currentIdx-1;
 	isScrollText = optionItem[optionMap["Scroll Text"]].currentIdx;
+#ifdef MEMORY_CURSOR_POS
+	MemorySysMenupos = optionItem[optionMap["Memory systemmenu cursor"]].currentIdx;
+#endif // MEMORY_CURSOR_POS
 	TextDelay = 600/(optionItem[optionMap["Menu select speed"]].currentIdx + 1);
 	IsFrameLimit = optionItem[optionMap["Frame Limit"]].currentIdx;
 	if (Use2413 != optionItem[optionMap["Use FM Sound(Ym2413)"]].currentIdx)
@@ -4983,6 +5080,16 @@ void LoadOption(bool IsInit)
 	{
 		Use8950TurboR = optionItem[optionMap["Use Y8950 on MSXTurboR"]].currentIdx;
 		messageType = messageType > 1 ? messageType : 1;
+	}
+	if (ReadSCCPlus != optionItem[optionMap["Read SCC Plus Wave"]].currentIdx)
+	{
+		ReadSCCPlus = optionItem[optionMap["Read SCC Plus Wave"]].currentIdx;
+		if (GetROMType(0) == MAP_SCCPLUS_2)
+		{
+			if (ReadSCCPlus)CartSpecial[0] = CART_READSCC;
+			else if (CartSpecial[0] == CART_READSCC)CartSpecial[0] = 0;
+			messageType = messageType > 1 ? messageType : 1;
+		}
 	}
 	if (NewPSGType != optionItem[optionMap["PSG Chip Type"]].currentIdx)
 	{
@@ -5103,12 +5210,14 @@ void LoadOption(bool IsInit)
 	{
 		PrinterMode = optionItem[optionMap["Printer Port"]].currentIdx;
 		if (PrinterMode == PRINTER_PRINT2FILE)ChangePrinter("/FMSX3DS/printer.txt");
+		messageType = messageType > 1 ? messageType : 1;
 	}
 	if (IsInit)
 	{
 		Mode = (Mode & ~MSX_MODEL) | NewMSX_Mode;
 		//if(NewMSXDOS)Mode |= MSX_MSXDOS2;
 		//else Mode &= ~MSX_MSXDOS2;
+		RAMPages = 4 << NewRAMSize;
 		PSGType = NewPSGType;
 		SoundChannels = NewSoundChs;
 	}
