@@ -17,7 +17,7 @@ See http://fms.komkon.org/fMSX/ for further informations.
 fMSX3DS is the port of fMSX for Nintendo3DS(New 3DS/New 2DS/Old 3DS/Old 2DS).
 In additional, it add audio emulation by Mitsutaka Okazaki(emu2413.c etc.) with latest version.
  It's not the legacy version of over 20 year ago that many emulator uses, but latest(2022) one.
-In additional, it add MSXTurobR and MSX0 emulation.
+In additional, it add MSXTurboR and MSX0 emulation.
 Also, it add various improvements based on recently analize of MSX hardware
 include analize in Japan that is unknown in world wide.
 Read "What's new.txt" to see more detail.
@@ -108,6 +108,7 @@ Then you can move paddle with touch screen, and you can shot fire with L key or 
 
 <7.Special Hardware>
 fMSX3DS is first emulator that support +PCM hardware and VoiceBox and MSX0 hardware.
+Also, fMSX3DS supports various special hardwares.
 +PCM:
 + PCM is ADPCM Voice Sampling hardware.
 No commercial game support this hardware. but, some japanese homebrew/doujin game support this.
@@ -133,6 +134,10 @@ To use this, First, Move 3D depth slider up to enable Nintendo 3DS's stereoscopi
 then, choose "[Option]" item in the fMSX3DS system menu,
 and change option item "<Graphic Setting/Use 3D Stereoscopic> to select stereoscopic 3D mode.
  Currently,you can select only anaglyph 3D and anaglyph 3D(Color) for now.
+
+V9990:
+Some homebrew game/app requires V9990 or ites clones(GFX9000 etc).
+To use that, Chose "[Option]" item in the fMSX3DS system menu, and enable the "Use V9990" option item.
 
 MSX0:
 MSX0 is new offical MSX project start at 2023.
@@ -173,6 +178,10 @@ If you dislike this limitations, use New3DS that has no limitation.
 
 -Slow on MSXTurboR.On New3DS it runs full speed.
 
+Q.A disk that was once working suddenly stopped working. What should I do?
+A.Try to delete disk file with the same name that has placed "FMSX3DS/SAVEDISK" folder("root\FMSX3DS\SAVEDISK").
+ Caution that when you delete the file, you lost save data. So i suggest you to make backup of that file.
+
 Q.What's the point of "[Load Screen Shot]" item in the fMSX3DS system menu?
 A.It shows a image taht was made with "[Save Screen Shot]" menu.
 It helps you to manage passwords for games's ave data.
@@ -194,6 +203,10 @@ A.Load Japanese BIOS named "MSXJ.ROM" or "MSX2J.ROM" as match as posible.
  It's usefull for playing a game that works only japanese MSX(metal gear etc.).
  Also It's usefullfor playing games with 60 FPS.
 
+Q."[State Load]" item in the fMSX3DS system menu does'nt work.
+A. To load the saved state, the RAM size must be the same size as when it was saved.
+Revert RAM Size with "RAM Size" option item in the [option] menu. 
+
 
 <9.Authors>
 fMSX : MSX computer emulator
@@ -201,9 +214,9 @@ fMSX : MSX computer emulator
 
   Original fMSX                  by Marat Fayzullin (1994-2021).
   fMSX-SDL port                  by Vincent van Dam (2001).
-  YM2413/PSG/SCC/Y8950 emulation by Mitsutaka Okazaki (2001-2022).
+  YM2413/PSG/SCC/Y8950 emulation by Mitsutaka Okazaki (2001-2024).
 
-  3DS port			 by h.tomioka(2023)
+  3DS port			 by h.tomioka(2023-2024)
 
   C-BIOS			 by BouKiCHi and many people(2002-2018)
   Pseudo Kanji ROM		 by Ａ ｔｏ Ｃ(1997)
