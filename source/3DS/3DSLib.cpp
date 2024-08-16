@@ -50,6 +50,9 @@ int OldV9KScrMode;
 static unsigned int V9kXPal[80];
 static unsigned short* V9KXBuf;
 void PutImageSuperImpose(void);
+#ifdef DUAL_SCREEN
+void PutImageDualScreen(void);
+#endif // DUAL_SCREEN
 #endif // VDP_V9990
 
 
@@ -83,6 +86,12 @@ C3D_Tex ScreenTexR;
 Tex3DS_SubTexture ScreenSubTexR;
 extern C3D_RenderTarget* TopRenderTargetR;
 #endif // USE_3D
+#ifdef DUAL_SCREEN
+C2D_Image ScreenImageBottom;
+C3D_Tex	ScreenTexBottom;
+Tex3DS_SubTexture ScreenSubTexBottom;
+#endif DUAL_SCREEN
+
 
 
 //#define TopTexWidth  400
@@ -111,7 +120,6 @@ static u64 FirstLineTime;
 static u64 LineTimePerFrame;
 static u64 AudioTimePerFrame;
 static u64 LineStepTimePerFrame;
-int putimgCnt = 0;
 int FPSDelay = 0;
 int FPSNoDelay = 0;
 int FrameSkipChangeCnt = 0;
@@ -324,6 +332,18 @@ int InitMachine(void)
   ScreenImageR.subtex = &ScreenSubTexR;
 #endif // USE_3D
 
+#ifdef DUAL_SCREEN
+  C3D_TexInit(&ScreenTexBottom, TopTexWidth, TopTexHeight, GPU_RGB565);
+  ScreenSubTexBottom.width = TopTexWidth;
+  ScreenSubTexBottom.height = TopTexHeight;
+  ScreenSubTexBottom.left = 0.0f;
+  ScreenSubTexBottom.right = 1.0f;
+  ScreenSubTexBottom.top = 1.0f;
+  ScreenSubTexBottom.bottom = 0.0f;
+
+  ScreenImageBottom.tex = &ScreenTexBottom;
+  ScreenImageBottom.subtex = &ScreenSubTexBottom;
+#endif // DUAL_SCREEN
 
   C3D_TexInit(&WideTex, WideTextWidth, TopTexHeight, GPU_RGB565);
   WideSubTex.width = WideTextWidth;
@@ -384,6 +404,13 @@ void PutImage(void)
 		PutImageSuperImpose();
 		return;
 	}
+#ifdef DUAL_SCREEN
+	if (V9990Dual & 0x02)
+	{
+		PutImageDualScreen();
+		return;
+	}
+#endif // DUAL_SCREEN
 #endif // VDP_V9990
 
 #ifdef USE_3D
@@ -1407,8 +1434,123 @@ void PutImageSuperImpose(void)
 
 	C3D_FrameEnd(0);
 }
-#endif // VDP_V9990
+#ifdef DUAL_SCREEN
+void PutImageDualScreen(void)
+{
+	if (V9990Active)
+	{
+		if (V9KScrMode != OldV9KScrMode)
+		{
+			OldV9KScrMode = V9KScrMode;
+			SetupWideScreen(false);
+		}
+	}
+	else
+		if (ScrMode != OldScrMode)
+		{
+			OldScrMode = ScrMode;
+			SetupWideScreen(false);
+		}
+	const int dwidth = WIDTH, dheight = HEIGHT;
+	const int swidth = 512, sheight = 256;
+	int i, j, vx0, vx1, v0;
 
+	u32* srcbuf0, * srcbuf1, * srcbuf2, * srcbuf3, * srcbuf4, * srcbuf5, * srcbuf6, * srcbuf7;
+
+	u32* scrbuf = (u32*)ScreenTex.data;
+	u32* scrtexbf;
+	u32* scrbuf2 = (u32*)ScreenTexBottom.data;
+	u32* scrtexbf2;
+
+	for (j = 0; j < dheight; j += 4)
+	{
+		v0 = (j >> 3) * (swidth >> 3);
+		vx1 = (j * dwidth) >> 1;
+		srcbuf0 = (u32*)V9KXBuf + vx1;
+		srcbuf1 = srcbuf0 + (dwidth >> 1);
+		srcbuf2 = srcbuf1 + (dwidth >> 1);
+		srcbuf3 = srcbuf2 + (dwidth >> 1);
+
+		srcbuf4 = (u32*)XBuf + vx1;
+		srcbuf5 = srcbuf4 + (dwidth >> 1);
+		srcbuf6 = srcbuf5 + (dwidth >> 1);
+		srcbuf7 = srcbuf6 + (dwidth >> 1);
+
+		for (i = 0; i < (dwidth >> 3); ++i, srcbuf0 += 4, srcbuf1 += 4, srcbuf2 += 4, srcbuf3 += 4, srcbuf4 += 4, srcbuf5 += 4, srcbuf6 += 4, srcbuf7 += 4)
+		{
+			vx0 = (((v0 + i) << 6) + (((i << 3) & 0x04) << 2) | ((j & 0x04) << 3));
+
+			scrtexbf = scrbuf + (vx0 >> 1);
+			scrtexbf2 = scrbuf2 + (vx0 >> 1);
+
+			scrtexbf[0] = srcbuf0[0];
+			scrtexbf[1] = srcbuf1[0];
+			scrtexbf[2] = srcbuf0[1];
+			scrtexbf[3] = srcbuf1[1];
+			scrtexbf[4] = srcbuf2[0];
+			scrtexbf[5] = srcbuf3[0];
+			scrtexbf[6] = srcbuf2[1];
+			scrtexbf[7] = srcbuf3[1];
+
+			scrtexbf[8] = srcbuf0[2];
+			scrtexbf[9] = srcbuf1[2];
+			scrtexbf[10] = srcbuf0[3];
+			scrtexbf[11] = srcbuf1[3];
+			scrtexbf[12] = srcbuf2[2];
+			scrtexbf[13] = srcbuf3[2];
+			scrtexbf[14] = srcbuf2[3];
+			scrtexbf[15] = srcbuf3[3];
+
+			scrtexbf2[0] = srcbuf4[0];
+			scrtexbf2[1] = srcbuf5[0];
+			scrtexbf2[2] = srcbuf4[1];
+			scrtexbf2[3] = srcbuf5[1];
+			scrtexbf2[4] = srcbuf6[0];
+			scrtexbf2[5] = srcbuf7[0];
+			scrtexbf2[6] = srcbuf6[1];
+			scrtexbf2[7] = srcbuf7[1];
+
+			scrtexbf2[8] = srcbuf4[2];
+			scrtexbf2[9] = srcbuf5[2];
+			scrtexbf2[10] = srcbuf4[3];
+			scrtexbf2[11] = srcbuf5[3];
+			scrtexbf2[12] = srcbuf6[2];
+			scrtexbf2[13] = srcbuf7[2];
+			scrtexbf2[14] = srcbuf6[3];
+			scrtexbf2[15] = srcbuf7[3];
+		}
+	}
+	C3D_FrameBegin(C3D_FRAME_NONBLOCK);
+	C2D_TargetClear(TopRenderTarget, C2D_Color32(0, 0, 0, 255));
+
+	C2D_SceneBegin(TopRenderTarget);
+	switch (ScreenRes)
+	{
+	case 0:		/* No Scale */
+		C2D_DrawImageAt(ScreenImage, 65.0f, 10.0f, 1.0f, NULL, 1.0f, 1.0f);
+		break;
+	case 1:		/* Wide */
+		C2D_DrawImageAt(ScreenImage, 37.0f, 0.0f, 0.5f, NULL, 1.2f, 1.06f);
+		break;
+	case 2:		/* Full Screen */
+		C2D_DrawImageAt(ScreenImage, 0.0f, 0.0f, 0.5f, NULL, 1.46f, 1.06f);
+		break;
+	case 3:		/* Keep Aspect */
+		C2D_DrawImageAt(ScreenImage, 55.0f, 0.0f, 0.5f, NULL, 1.06f, 1.06f);
+		break;
+	case 4:		/* ExtremelyLarge */
+		C2D_DrawImageAt(ScreenImage, -12.0f, -21.0f, 0.5f, NULL, 1.56f, 1.24f);
+		break;
+	default:
+		break;
+	}
+	C2D_TargetClear(BottomRenderTartget, C2D_Color32(0, 0, 0, 255));
+	C2D_SceneBegin(BottomRenderTartget);
+	C2D_DrawImageAt(ScreenImageBottom, 0.0f, 0.0f, 1.0f, NULL, 1.18f, 1.06f);
+	C3D_FrameEnd(0);
+}
+#endif // DUAL_SCREEN
+#endif // VDP_V9990
 
 
 void  SetupWideScreen(bool isWide)
@@ -1537,6 +1679,20 @@ void Keyboard(void)
 	if (kDown & KEY_TOUCH)
 	{
 		kDown &= ~KEY_TOUCH;
+#ifdef VDP_V9990
+		if (V9990Dual)
+		{
+			StartMenu();
+			if (BrowseOK("Do you want to end Dual Screen Mode?", "")==true)
+			{
+				V9990Dual &= 0xFD;
+			}
+			EndMenu();
+			LoadOption(false);
+			DrawKeyboard3DS();
+			return;
+		}
+#endif // VDP_V9990
 		SoftwareKeyboardCheck(true, px, py);
 		oldtp.px = px;
 		oldtp.py = py;
@@ -2135,6 +2291,7 @@ void SoftwareKeyboardCheck(bool flag0, int px, int py)
 void DrawKeyboard3DS()
 {
 	if (TurboNow)return;
+	if (V9990Dual & 0x02)return;
 	if (IsScreenShot)
 	{
 		if(!IsSmallScrShot)DrawMouseScr();

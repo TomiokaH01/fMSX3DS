@@ -381,6 +381,7 @@ static std::vector<std::string> menuItem =
 	"[Save Screen Shot]",
 	"[Load Reference Image]",
 	"[Fast Forward]",
+	"[V9990 Dual Screen]",
 	"[OverClockR800(Unsafe)]",
 	"[Cheat]",
 #ifdef DEBUG_ENABLE
@@ -3575,6 +3576,21 @@ void systemMenu()
 				ResetMSX(Mode, RAMPages, VRAMPages);
 				return;
 			}
+#ifdef VDP_V9990
+#ifdef DUAL_SCREEN
+			else if(selectmenu == "[V9990 Dual Screen]")
+			{
+				V9990DualScreen = BrowseInt("[V9990 Dual Screen]", OptionOffOn, V9990DualScreen, 0, false);
+				if (!V9990DualScreen)V9990Dual &= 0xFD;
+				else
+				{
+					DrawMessage("fMSX3DS running on dual screen mode now.", "Touch screen to end.", 10, 50, 1000, true);
+					if (V9990Active)V9990Dual |= 2;
+					return;
+				}
+			}
+#endif // DUAL_SCREEN
+#endif // VDP_V9990
 #ifdef USE_OVERCLOCK
 			else if (selectmenu == "[OverClockR800(Unsafe)]")
 			{
