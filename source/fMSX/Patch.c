@@ -1385,7 +1385,7 @@ void PatchR800(Z80* R, word Value)
         if (Verbose)printf("INIHRD\n");
         break;
     case 0xE2:      /* DRIVES */
-        R->HL.W = R->HL.W & 0xFF00 | 0x02;
+        R->HL.W = R->HL.W & 0xFF00 | ((R->AF.B.l & 0x40) ? 1 : 2);
         if (Verbose)printf("DRIVES\n");
         break;
     case 0xE4:      /* PHYDIO */
