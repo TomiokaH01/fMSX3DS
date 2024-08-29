@@ -79,6 +79,7 @@ extern unsigned char MSXDOS2Mapper;
 extern unsigned char UseMSX0;
 extern unsigned char LoadXBASIC;
 extern unsigned char MSX0_I2CA;
+extern unsigned char MSX0_ANALOGOUT;
 //extern unsigned char MSX0_GPIO;
 //extern unsigned char MSX0_UART;
 #endif // _MSX0
@@ -87,6 +88,7 @@ extern unsigned char MSX0_I2CA;
 extern unsigned char UseV9990;
 extern unsigned char V9990Active;
 extern unsigned char V9990Dual;
+extern unsigned char V9990DualScreen;
 extern int V9KcurrLine;
 #endif // VDP_V9990
 
@@ -94,6 +96,9 @@ extern int V9KcurrLine;
 extern unsigned char overClockRatio;
 #endif // USE_OVERCLOCK
 
+#ifdef SUPERIMPOSE
+extern unsigned char SuperimposeTransp;
+#endif // SUPERIMPOSE
 
 #ifdef AUDIO_SYNC
 extern int audioCycleCnt;
@@ -220,7 +225,6 @@ void DrawDiskLamp();
 int WaitSync();
 int WaitSyncLine();
 int WaitSyncLineStep();
-void WaitSyncAudio();
 void CheckPALVideo();
 void SetFirstLineTime();
 void checkAutoFrameSkip();
@@ -236,6 +240,10 @@ int CalcCRC32(void* Buf, const char* filePath, int Size);
 void CheckSpecialCart(void* Buf, int Size, int Type, int Slot);
 void LoadCartAtStart();
 void InitXbuf();
+#ifdef SUPERIMPOSE
+void InitScreenShotTexture(SDL_Surface* ssurface);
+void ChangeScreenImposeTransparent(int alpha);
+#endif // SUPERIMPOSE
 void ShowMessage3DS(char* msg, char* msg2);
 void DoReloadFMPAC();
 int Debug_CalcBPalVlue(int R, int G, int B);
