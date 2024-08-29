@@ -414,12 +414,18 @@ int VDPIOTimerCnt;
                                 if ((VDPIOTimerCnt - CPU.ICount) < 48)CPU.ICount = VDPIOTimerCnt - 60;  \
                                 VDPIOTimerCnt = CPU.ICount;}
 #endif // TURBO_R
+#ifdef DER_DISK
+unsigned char  isLoadDer = 0;
+unsigned char* derBuf;
+#endif // DER_DISK
+
 
 #ifdef _MSX0
 unsigned char UseMSX0 = 0;
 unsigned char LoadXBASIC = 0;
 int IOTMode = IOT_NODE_NONE;
 unsigned char MSX0_I2CA = 1;
+unsigned char MSX0_ANALOGOUT = 0;
 byte IOTVal;
 //unsigned char MSX0_GPIO = 0;
 //unsigned char MSX0_UART = 0;
@@ -452,6 +458,7 @@ unsigned char V9KPal[256];
 unsigned char UseV9990 = 0;
 unsigned char V9990Active = 0;
 unsigned char V9990Dual = 0;
+unsigned char V9990DualScreen = 0;
 int V9KScanLine = 0;
 int V9KcurrLine = 0;
 int V9kFirstLine = 0;
@@ -995,7 +1002,8 @@ void TrashMSX(void)
 #ifdef  _3DS
     DoAutoSave();
     WriteOptionCFG();
-    if (!(DeviceInited & 0x01))HIDUSER_DisableGyroscope();
+    if (DeviceInited & 0x01)HIDUSER_DisableGyroscope();
+    if (DeviceInited & 0x02)mcuHwcExit();
 #endif //  _3DS
 #ifdef LOG_ERROR
     WriteErrorLog();
@@ -2266,7 +2274,7 @@ byte InZ80(word Port)
     {
 #ifdef _MSX0
     case 0x08:
-    case 0x58:      /* firmware 0.07.08 */
+    case 0x58:      /* MSX0 IO firmware 0.07.08 */
         return (InMSX0IOT());
 #endif // _MSX0
 
@@ -2698,7 +2706,7 @@ void OutZ80(word Port, byte Value)
 
 #ifdef _MSX0
     case 0x08:
-    case 0x58:  /* firmware 0.07.08 */
+    case 0x58:  /* MSX0 IO firmware 0.07.08 */
         OutMSX0IOT(Value);
         return;
 #endif // _MSX0
@@ -6671,6 +6679,9 @@ word InMSX0IOT()
 
         case IOT_NODE_HEAP:        /* Heap memory */
             return (osGetMemRegionFree(MEMREGION_ALL) / 1000);
+
+        case IOT_NODE_I2C_IN:
+            return(ReadIOTGET(IOTVal));
         default:
             break;
         }
@@ -6827,6 +6838,58 @@ void OutMSX0IOT(unsigned char val)
         IOTCmdPos = 1;
         return;
     }
+    if (IOTCmdPos == 6)
+    {
+        /* IOTPUT Output */
+        if ((IOTCmdData[2] & 0xF0) == 0x40)
+        {
+            /* analog */
+            if (IOTCmdData[12] == 'a' && IOTCmdData[13] == 'n' && IOTCmdData[14] == 'a' && IOTCmdData[15] == 'l' && IOTCmdData[16] == 'o' && IOTCmdData[17] == 'g')
+            {
+                /* "out" */
+                if (IOTCmdData[19] == 'o' && IOTCmdData[20] == 'u' && IOTCmdData[21] == 't')
+                {
+                    if (MSX0_ANALOGOUT == 1)    /* LED(Analog ooutput) */
+                    {
+                        /* LED with 3DS's Power LED(Unsafe!) */
+                        if (!(DeviceInited & 0x02))
+                        {
+                            mcuHwcInit();
+                            DeviceInited |= 0x02;
+                        }
+                        unsigned char ledval = (((word)(val & 0x0F) << 8 | (word)IOTCmdData[5])) >> 4;
+                        MCUHWC_WriteRegister(0x28, &ledval, 1);    // i2c Register 0x28 for 3DS 	Brightness of the WiFi/Power LED
+                                                                    //https://www.3dbrew.org/wiki/I2C_Registers#Device_3
+                    }
+                    if (Verbose & 0x20)
+                        printf("Analog Out[%d]\n", val<<8 | IOTCmdData[5]);
+                    IOTCmdPos = 0;
+                    return;
+                }
+            }
+            else if (IOTCmdData[5] == 0x94) /* AXP192 GPIO1 control register 0x94. MSX0 Power Indicator LED */
+            {
+                if(Verbose&0x20)
+                    printf("ITO PUT AXP192[%d]\n", val);
+                /* LED with 3DS's Power LED(Unsafe!) */
+                if (!(DeviceInited & 0x02))
+                {
+                    mcuHwcInit();
+                    DeviceInited |= 0x02;
+                }
+                IOTVal =val;
+                /* Info from Ninune-wa. */
+                /* https://github.com/Ninune-wa/MSX0-Sensor-Utility/tree/main/MSX0Stack-LED(PowerIndicatorLight) */
+                /* GPIO1 bit1 1:disable 0:enable */
+                if (val & 0x02)MCUHWC_SetPowerLedState(LED_OFF);
+                else MCUHWC_SetPowerLedState(LED_BLUE);
+                IOTCmdPos = 0;
+                return;
+            }
+            if (Verbose & 0x20)
+                printf("ITO PUT to Unkown module[%d]\n", val);
+        }
+    }
     if (IOTCmdPos == 3)
     {
         IOTCmdData[IOTCmdPos] = val;
@@ -6879,6 +6942,13 @@ void OutMSX0IOT(unsigned char val)
                         IOTCmdPos = 0;
                         return;
                     }
+                }
+                /* i2c_i */
+                if (IOTCmdData[12] == 'i' && IOTCmdData[13] == '2' && IOTCmdData[14] == 'c' && IOTCmdData[15] == '_' && IOTCmdData[16] == 'i')
+                {
+                    IOTMode = IOT_NODE_I2C_IN;
+                    IOTCmdPos = 0;
+                    return;
                 }
             }
             /* "host" */
@@ -7233,6 +7303,7 @@ void InitV9990()
     byte* P, P1;
     vdpV9990.Active = 1;
     V9990Active = 1;
+    if (V9990DualScreen)V9990Dual |= 2;
 
     for (J = 0; J < 64; J++)V9990VDP[J] = 0;
     for (J = 0; J < 16; J++)V9990Port[J] = 0;
