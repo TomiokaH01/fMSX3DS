@@ -120,14 +120,15 @@ extern "C" {
 #define MAP_ESESCC     29   /* Ese SCC                       */
 #define MAP_SYNTHE     30   /* Konami's Synthesizer          */
 #define MAP_ASCII16Big 31   /* ASCII16 over 2MB size.        */
+#define MAP_MEGASCSI   32   /* Ese RAM/Mega SCSI             */ 
 //#define MAP_PANSONIC   31   /* Firmware ROM for Panasonic MSX*/
-#define MAP_GUESS      32   /* Guess mapper automatically    */
+#define MAP_GUESS      33   /* Guess mapper automatically    */
 
 #define MAP_SRAM(N) \
   (((N)==MAP_ASCII8)||((N)==MAP_ASCII16)|| ((N)==MAP_ASCII16Big) || \
    ((N)==MAP_FMPAC) ||((N)==MAP_GMASTER2)|| ((N)==MAP_ASCII8SRM32) || \
    ((N)==MAP_ASCII16_2) || ((N)==MAP_ZeminaDS2) || ((N)==MAP_Wizardry) ||\
-   ((N)==MAP_MANBOW2) || ((N)==MAP_ESESCC))
+   ((N)==MAP_MANBOW2) || ((N)==MAP_ESESCC) || ((N)==MAP_MEGASCSI))
 
 #define HIDE_KEYBOARD   2
 #define JOY_ARKANOID    4
@@ -198,7 +199,8 @@ void InitV9990(void);
 #define IOT_NODE_BATTERY     8   /* battery voltage         */
 #define IOT_NODE_BATTERY_LV  9   /* battery level           */
 #define IOT_NODE_WIFI_LV    10   /* wifi level              */
-#define IOT_NODE_HEAP       11   /* heap memory             */   
+#define IOT_NODE_HEAP       11   /* heap memory             */
+#define IOT_NODE_I2C_IN     12   /* device find i2c_i input */
 #define IOT_READ_CHR    (IOTReadPos - (IOTReadPos / 3) - 1)
 #endif // _MSX0
 
@@ -320,6 +322,7 @@ void LoadKanjiROM(void);
 //void UnLoadMSXDOS2(void);
 void LoadSCCPLUS(int Slot);
 void LoadESESCC(int Slot, int RamSize);
+void LoadESERAM(int Slot, int RamSize);
 void SetNonMegaROM(byte Slot);
 byte ReadRAM(word A);
 static byte* ResizeMemory(byte* Buf, int Size);
@@ -468,6 +471,10 @@ extern const char *FNTName;           /* Font file for text  */
 
 extern FDIDisk FDD[4];                /* Floppy disk images  */
 extern FILE *CasStream;               /* Cassette I/O stream */
+#ifdef _3DS
+extern unsigned char  isLoadDer;
+extern unsigned char* derBuf;
+#endif // _3DS
 #if defined(HDD_NEXTOR) || defined(HDD_IDE)
 extern FDIDisk HDD[2];
 #endif // HDD_NEXTOR    HDD_IDE
