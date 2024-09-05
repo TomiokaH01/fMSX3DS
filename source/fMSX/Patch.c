@@ -281,6 +281,15 @@ case 0x4010:
         OldStart = R->DE.W;
     }
 
+    /* RuMSX's ".der" file for copy protected disk. */
+    if (isLoadDer)
+    {
+        if (derBuf[R->DE.W >> 3] & (0x80 >> (R->DE.W & 0x07)))
+        {
+            R->AF.W = 0x0401; return;
+        }
+    }
+
     if (!DiskPresent(R->AF.B.h))
     {
         R->AF.W = 0x0201; return;
