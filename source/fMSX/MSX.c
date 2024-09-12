@@ -3477,7 +3477,9 @@ void MapROM(register word A, register byte V)
                 /* Switch ROM pages */
                 V = (V << 1) & 0x07;
 
-                if (A == 0x7FF0 || A == 0x7FFE || A == 0x6000)
+                //if (A == 0x7FF0 || A == 0x7FFE || A == 0x6000)
+                //only 0x7FF0 ? This fix Breaker(Jast) to work on MSXTurboR. 
+                if (A == 0x7FF0)
                 {
                     //if (MODEL(MSX_MSXTR))
                     if (V != MSXDOS2Mapper)
