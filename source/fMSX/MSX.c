@@ -410,15 +410,12 @@ int R800TimerCnt;
 int PCMTimerCnt;
 byte PCMTimerReg;
 int VDPIOTimerCnt;
+unsigned char  isLoadDer = 0;
+unsigned char* derBuf;
 #define UpdateVDPDelay()        if(CPU.User & 0x01){                    \
                                 if ((VDPIOTimerCnt - CPU.ICount) < 48)CPU.ICount = VDPIOTimerCnt - 60;  \
                                 VDPIOTimerCnt = CPU.ICount;}
 #endif // TURBO_R
-#ifdef DER_DISK
-unsigned char  isLoadDer = 0;
-unsigned char* derBuf;
-#endif // DER_DISK
-
 
 #ifdef _MSX0
 unsigned char UseMSX0 = 0;
@@ -1644,7 +1641,7 @@ int ResetMSX(int NewMode, int NewRAMPages, int NewVRAMPages)
     Mode = NewMode;
 
 #ifdef _3DS
-    if (ROMType[0] == MAP_ESESCC)
+    if ((ROMType[0] == MAP_ESESCC) || (ROMType[0] == MAP_MEGASCSI))
     {
         if (SaveSRAM[0] && SRAMName[0])
         {
@@ -1751,6 +1748,7 @@ int ResetMSX(int NewMode, int NewRAMPages, int NewVRAMPages)
             else if (ROMType[J] == MAP_LodeRunner)SetMegaROM(J, 0, 1, 0, 1);
             else if (ROMType[J] == MAP_PLAIN)SetNonMegaROM(J);
             else if (ROMType[J] == MAP_ESESCC)LoadESESCC(J, 1);
+            else if (ROMType[J] == MAP_MEGASCSI)LoadESERAM(J, 1);
             //else if (ROMType[J] == MAP_PLAIN)SetMegaROM(J, 0, 1, 2, 3);
             else
 #endif // _3DS
@@ -4539,6 +4537,28 @@ void MapROM(register word A, register byte V)
             return;
         }
         break;
+    case MAP_MEGASCSI:
+        if ((A >= 0x6000) && (A < 0x8000))
+        {
+            J = (A & 0x1800) >> 11;
+            if (V != ROMMapper[I][J])
+            {
+                RAM[J + 2] = MemMap[PS][SS][J + 2] = ExternalRAMData[I] + ((int)(V&0x3F) << 13);
+                ROMMapper[I][J] = V;
+                if (Verbose & 0x08)
+                    printf("ROM-MAPPER SRAM val:%02Xh at:%04Xh \n", V, A);
+                //if ((J != 1) && (V >= 0x80))ROMMapper[I][J] = 0xFF;
+            }
+            return;
+        }
+        //else if ((A >= 0x4000) && (A < 0xC000) && (ROMMapper[I][((A-0x4000) >> 13)] == 0xFF))
+        else if ((A >= 0x4000) && (A < 0xC000) && (ROMMapper[I][((A - 0x4000) >> 13)] >=0x80))
+        {
+            RAM[A >> 13][A & 0x1FFF] = V;
+            SaveSRAM[I] = 1;
+            return;
+        }
+        break;
 #endif //   TURBO_R
     }
 
@@ -6178,7 +6198,7 @@ void LoadESESCC(int Slot, int RamSize)
         fread(ExternalRAMData[Slot], 1, 0x80000, F);
         fclose(F);
     }
-    else if (F = sramfopen("esescc512A.sram", "rb"))
+    else if (F = sramfopen("esescc512A.sram", "rb"))    /* Comapible with other emulator. */
     {
         fread(ExternalRAMData[Slot], 1, 0x80000, F);
         fclose(F);
@@ -6197,6 +6217,62 @@ void LoadESESCC(int Slot, int RamSize)
     ROMMask[Slot] = 0x3F;
 
     SetROMType(Slot, MAP_ESESCC);
+}
+
+
+void LoadESERAM(int Slot, int RamSize)
+{
+    byte* P, PS, SS;
+    FILE* F;
+    /* Slot number must be valid */
+    if ((Slot < 0) || (Slot >= MAXSLOTS)) return;
+    /* Find primary/secondary slots */
+    for (PS = 0; PS < 4; ++PS)
+    {
+        for (SS = 0; (SS < 4) && (CartMap[PS][SS] != Slot); ++SS);
+        if (SS < 4) break;
+    }
+    /* Drop out if slots not found */
+    if (PS >= 4) return;
+
+    ROMData[Slot] = P = ResizeMemory(ROMData[Slot], 0x80000);
+    memset(P, 0x00, 0x80000);
+    P[0] = 'A';
+    P[1] = 'B';
+
+    ROMType[Slot] = MAP_MEGASCSI;
+    ROMName[Slot] = "eseram512A";
+    SRAMName[Slot] = "eseram512A.sav";
+    //SRAMName[Slot] = "eseram512A.sram";
+
+    /* Use ResizeMemory() insted of GetMemory() for large size data because of error in Old3DS.*/
+    ExternalRAMData[Slot] = ResizeMemory(ExternalRAMData[Slot], 0x80000);
+
+    memset(ExternalRAMData[Slot], NORAM, 0x80000);
+    memcpy(ExternalRAMData[Slot], P, 0x80000);
+    if (F = sramfopen("eseram512A.sav", "rb"))
+    {
+        fread(ExternalRAMData[Slot], 1, 0x80000, F);
+        fclose(F);
+    }
+    else if (F = sramfopen("eseram512A.sram", "rb"))         /* Comapible with other emulator. */
+    {
+        fread(ExternalRAMData[Slot], 1, 0x80000, F);
+        fclose(F);
+    }
+
+    MemMap[PS][SS][2] = ExternalRAMData[Slot];
+    MemMap[PS][SS][3] = ExternalRAMData[Slot] + 0x2000;
+    MemMap[PS][SS][4] = ExternalRAMData[Slot] + 0x4000;
+    MemMap[PS][SS][5] = ExternalRAMData[Slot] + 0x6000;
+
+    ROMMapper[Slot][0] = 0;
+    ROMMapper[Slot][1] = 0;
+    ROMMapper[Slot][2] = 0;
+    ROMMapper[Slot][3] = 0;
+    ROMMask[Slot] = 0x3F;
+
+    SetROMType(Slot, MAP_MEGASCSI);
 }
 
 
@@ -7965,6 +8041,7 @@ int LoadCart(const char* FileName, int Slot, int Type)
                 break;
             case MAP_MANBOW2:
             case MAP_ESESCC:
+            case MAP_MEGASCSI:
                 if (fwrite(ExternalRAMData[Slot], 1, 0x80000, F) != 0x80000)SaveSRAM[Slot] = 0;
                 break;
 #endif // _3DS
@@ -8016,6 +8093,7 @@ int LoadCart(const char* FileName, int Slot, int Type)
 #ifdef _3DS
     if (strcasecmp(FileName, "SCCPLUS") == 0)LoadSCCPLUS(Slot);
     else if (strcasecmp(FileName, "esescc512A") == 0)LoadESESCC(Slot, 1);
+    else if (strcasecmp(FileName, "eseram512A") == 0)LoadESERAM(Slot, 1);
     /* Try opening file */
     if (!(F = zipfopen(FileName, "rb"))) return(0);
 #else
@@ -8390,6 +8468,32 @@ int LoadCart(const char* FileName, int Slot, int Type)
         ROMMapper[Slot][2] = 2;
         ROMMapper[Slot][3] = 3;
         SCCMode[Slot] = 0x20;
+        ROMMask[Slot] = 0x3F;
+    }
+    else if (Type == MAP_MEGASCSI)
+    {
+        if (Slot >= MAXCARTS)return(0);
+        /* Use ResizeMemory() insted of GetMemory() for large size data because of error in Old3DS.*/
+        ExternalRAMData[Slot] = ResizeMemory(ExternalRAMData[Slot], 0x80000);
+
+        memset(ExternalRAMData[Slot], NORAM, 0x80000);
+        memcpy(ExternalRAMData[Slot], P, Len << 13);
+
+        if (F = sramfopen("eseram512A.sram", "rb"))
+        {
+            fread(ExternalRAMData[Slot], 1, 0x80000, F);
+            fclose(F);
+        }
+
+        MemMap[PS][SS][2] = ExternalRAMData[Slot];
+        MemMap[PS][SS][3] = ExternalRAMData[Slot] + 0x2000;
+        MemMap[PS][SS][4] = ExternalRAMData[Slot] + 0x4000;
+        MemMap[PS][SS][5] = ExternalRAMData[Slot] + 0x6000;
+
+        ROMMapper[Slot][0] = 0;
+        ROMMapper[Slot][1] = 0;
+        ROMMapper[Slot][2] = 0;
+        ROMMapper[Slot][3] = 0;
         ROMMask[Slot] = 0x3F;
     }
     else if (Type == MAP_DOOLY)
