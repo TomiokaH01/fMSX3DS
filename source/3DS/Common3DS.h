@@ -1687,7 +1687,7 @@ void RefreshLine10(register byte Y)
 	{
 		sprDraw = ColorSpritesScr78(Y, ZBuf);
         R = ZBuf + 32 + SR;
-		T = ChrTab + ((((int)(Y + VScroll) << 8) & ChrTabM & 0xFFFF) >> 1);
+        T = ChrTab + (((((int)(Y + VScroll) << 8) & ChrTabM) >> 1)&0xFFFF);
 		if (UseInterlace && InterlaceON && FlipEvenOdd && (VDPStatus[2] & 0x02))T -= 0x8000;
 		if (HScroll512)
 		{
@@ -1787,7 +1787,7 @@ void RefreshLine10(register byte Y)
 					//if (X == 64 - SL % 64)
                     if (X == 64 - (SL<<1) % 64)
 					{
-						T = ChrTab + ((((int)(Y + VScroll) << 8) & ChrTabM & 0xFFFF) >> 1);
+                        T = ChrTab + (((((int)(Y + VScroll) << 8) & ChrTabM) >> 1) & 0xFFFF);
 						T += SL < 32 ? 0 : -0x8000;
 					}
 					K = (T[0] & 0x07) | ((T[0x10000] & 0x07) << 3);
@@ -1816,7 +1816,7 @@ void RefreshLine10(register byte Y)
 					//if (X == 64 - SL % 64)
                     if (X == 64 - (SL << 1) % 64)
 					{
-						T = ChrTab + ((((int)(Y + VScroll) << 8) & ChrTabM & 0xFFFF) >> 1);
+                        T = ChrTab + (((((int)(Y + VScroll) << 8) & ChrTabM) >> 1) & 0xFFFF);
 						T += SL < 32 ? 0 : -0x8000;
 					}
 					K = (T[0] & 0x07) | ((T[0x10000] & 0x07) << 3);
