@@ -91,7 +91,11 @@ C2D_Image ScreenImageBottom;
 C3D_Tex	ScreenTexBottom;
 Tex3DS_SubTexture ScreenSubTexBottom;
 #endif DUAL_SCREEN
-
+#ifdef SUPERIMPOSE
+C2D_Image ScreenImageImpose;
+C3D_Tex ScreenTexImpose;
+Tex3DS_SubTexture ScreenSubTexImpose;
+#endif // SUPERIMPOSE
 
 
 //#define TopTexWidth  400
@@ -130,6 +134,12 @@ extern bool AllowWide;
 extern bool IsWide;
 extern bool IsOld2DS;
 extern bool IsScreenShot;
+#ifdef SUPERIMPOSE
+extern bool IsImposeScreenShot;
+extern float ImposeRefX;
+extern float ImposeRefY;
+extern float ImposeRefSize;
+#endif // SUPERIMPOSE
 extern bool ShowDebugMsg3DS;
 extern bool IsSmallScrShot;
 extern unsigned char ScreenRes;
@@ -627,6 +637,10 @@ void PutImage(void)
 			break;
 		default:
 			break;
+		}
+		if (IsImposeScreenShot)
+		{
+			C2D_DrawImageAt(ScreenImageImpose, ImposeRefX, ImposeRefY, 0.2f, NULL, ImposeRefSize, ImposeRefSize);
 		}
 		if (IsShowFPS)
 		{
@@ -2538,6 +2552,7 @@ void Reset3DS()
 	ScreenShotOffx = 0;
 	ScreenShotOffy = 0;
 	IsScreenShot = false;
+	IsImposeScreenShot = false;
 	IsSmallScrShot = false;
 	playYM2413 = 0;
 	playY8950 = 0;
@@ -3160,6 +3175,30 @@ void InitXbuf()
 		V9KXBuf[i] = 0x00;
 	}
 }
+
+
+#ifdef SUPERIMPOSE
+void InitScreenShotTexture(SDL_Surface* ssurface)
+{
+	C3D_TexInit(&ScreenTexImpose, TopTexWidth, TopTexHeight, GPU_RGBA8);
+	ScreenSubTexImpose.width = TopTexWidth;
+	ScreenSubTexImpose.height = TopTexHeight;
+	ScreenSubTexImpose.left = 0.0f;
+	ScreenSubTexImpose.right = 1.0f;
+	ScreenSubTexImpose.top = 1.0f;
+	ScreenSubTexImpose.bottom = 0.0f;
+
+	ScreenImageImpose.tex = &ScreenTexImpose;
+	ScreenImageImpose.subtex = &ScreenSubTexImpose;
+	SDLSurfaceToC3DTexData(ssurface, ScreenTexImpose.data, ScreenSubTexImpose.width, ScreenSubTexImpose.height, 50);
+}
+
+
+void ChangeScreenImposeTransparent(int alpha)
+{
+	C3DTextureChangeAlpha(ScreenTexImpose, alpha);
+}
+#endif // SUPERIMPOSE
 
 
 void ShowMessage3DS(char* msg, char* msg2)

@@ -63,7 +63,6 @@ std::vector<std::string> ftypestring;
 std::vector<u8> ftypevec;
 std::vector<std::string> recentlylist;
 std::vector<std::string> recentftypelist;
-std::string SystemLoadString = "";
 
 u32 scrollTime = 0;
 bool isMouseDown = false;
@@ -129,6 +128,10 @@ unsigned char Stereo3DMode = 0;
 unsigned char OldIs3DNow = 0;
 unsigned char Is3DNow = 0;
 #endif // USE_3D
+#ifdef SUPERIMPOSE
+unsigned char SuperimposeTransp = 5;
+#endif // SUPERIMPOSE
+
 
 #ifdef DEBUG_LOG
 #define MAXDEBUG	1024
@@ -163,7 +166,7 @@ std::vector<char*> OptionOverClock = { "0(None)","x2(Unsafe)", "x4(Unsafe)" };
 std::vector<char*> OptionMSXType = {"MSX","MSX2","MSX2Plus","MSXTurboR"};
 std::vector<char*> OptinJoyPort = { "None", "JoyStick","Mouse as Joystick","Mouse","Arkanoid","TouchPad" };
 std::vector<char*> OptionPrinter = {"None", "PrintToFile", "VoiceBox", "+PCM", "COVOX"};
-std::vector<char*> OprionStereo3D = { "None", "Anaglyph", "Anaglyph(Color)" };
+std::vector<char*> OptionStereo3D = { "None", "Anaglyph", "Anaglyph(Color)" };
 std::vector<char*> OptionLanguage = { "Auto","Japanese","English" };
 std::vector<char*> OptionHQ = { "Normal", "High Quality" };
 std::vector<char*> OptionPSG = {"YM2419", "AY-3-8910"};
@@ -175,6 +178,7 @@ std::vector<char*> OptionScreenRes = { "No Scale", "Wide", "Full Screen", "Keep 
 std::vector<char*> OptionVsyncQuality = {"Highest(No Skip)","Higher","High","Normal","Low"};
 std::vector<char*> OptionRapidFire = {"OFF", "30/sec", "15/sec", "10/sec", "8/sec", "6/sec", "5/sec", "4/sec", "3/sec","2/sec","1/sec"};
 std::vector<char*> OptionMSX0 = {"None", "Encoder(3Dslider)"};
+std::vector<char*> OptionMSX0Out = { "None","LED(3DS PowerLED)" };
 
 static std::vector<char*> FileCharVec =
 {
@@ -206,7 +210,7 @@ static std::vector<OptionItem> optionItem =
 	{"",0,0,0,OptionNull},
 	{"<Graphic Option>",0,0,0,OptionNull},
 #ifdef USE_3D
-	{"3D Stereoscopic mode",0,0,0,OprionStereo3D },
+	{"3D Stereoscopic mode",0,0,0,OptionStereo3D },
 #endif // USE_3D
 	{"800px wide mode",1,1,1,OptionOffOn},
 	{"Screen Strech",1,1,1,OptionScreenRes},
@@ -223,6 +227,9 @@ static std::vector<OptionItem> optionItem =
 	{"Memory systemmenu cursor",0,0,0,OptionOffOn },
 #endif // MEMORY_CURSOR_POS
 	{"ShowFPS",0,0,0,OptionOffOn},
+#ifdef SUPERIMPOSE
+	{"SuperImpose Transparent",5,5,5,OptionNum},
+#endif // SUPERIMPOSE
 	{"New3DS Boost",0,1,0,OptionOnOff},
 	{"",0,0,0,OptionNull},
 	{"<Sound Option>",0,0,0,OptionNull},
@@ -243,6 +250,7 @@ static std::vector<OptionItem> optionItem =
 	{"Use MSX0",0,0,0,OptionOffOn},
 	{"Load X-BASIC2",1,1,1,OptionOffOn},
 	{"MSX0 Device A(i2c_a)",0,0,0,OptionMSX0},
+	{"MSX0 Analog Output",0,0,0,OptionMSX0Out},
 	{"",0,0,0,OptionNull},
 #endif // _MSX0
 
@@ -352,6 +360,7 @@ static std::vector<std::string> menuItem =
 	"[LoadROM(Slot2)]",
 	"[Load Konami SCC+ ROM]",
 	"[Load Ese SCC 512k ROM]",
+	"[Load Ese RAM 512k ROM]",
 	"[Change ROM Mapper]",
 	"[Apply IPS Patch]",
 	"[Eject ROM]",
@@ -362,6 +371,7 @@ static std::vector<std::string> menuItem =
 	"[SaveDisk(DriveA)]",
 	"[SaveDisk(DriveB)]",
 	"[Create New Disk]",
+	"[Load der file]",
 	"[Apply IPS Patch]",
 	"[Eject Disk]",
 #ifdef HDD_NEXTOR
@@ -380,7 +390,13 @@ static std::vector<std::string> menuItem =
 	"[Load Screen Shot](Show Keyboard)",
 	"[Save Screen Shot]",
 	"[Load Reference Image]",
+#ifdef SUPERIMPOSE
+	"[Load Reference Image](Super Impose)",
+	"[Move Reference Image]",
+	"[Close Reference Image]",
+#endif // SUPERIMPOSE
 	"[Fast Forward]",
+	"[V9990 Dual Screen]",
 	"[OverClockR800(Unsafe)]",
 	"[Cheat]",
 #ifdef DEBUG_ENABLE
@@ -395,6 +411,13 @@ bool IsWide = false;
 bool IsOld2DS = false;
 bool AutoFrameSkip = false;
 bool IsScreenShot = false;
+#ifdef SUPERIMPOSE
+bool IsImposeScreenShot = false;
+float ImposeRefX = 0;
+float ImposeRefY = 0;
+float ImposeRefSize = 1.0f;
+#endif // SUPERIMPOSE
+bool IsMenuImposeScreenShot = false;
 bool ShowDebugMsg3DS = false;
 bool IsSmallScrShot = false;
 unsigned char ScreenRes = 0;
@@ -525,7 +548,7 @@ void Init3DS()
 	KetySurfaceGraShift = SDL_LoadBMP(Get3DSPath("MSXKeyGraShift.bmp").c_str());
 
 	SDL_Surface* HUDSurface = SDLSurfaceExtract(KeySurface, 280, 150, KeySurface->w-280, KeySurface->h-150);
-	SDLSurfaceToC3DTexData(HUDSurface, HUDTex.data, HUDTex.width, HUDTex.height);
+	SDLSurfaceToC3DTexData(HUDSurface, HUDTex.data, HUDTex.width, HUDTex.height, 0xFF);
 
 	if (currJoyMode[0] < HIDE_KEYBOARD)DrawSurfaceRectBottom(KeySurface, 0, 320, 0, 240);
 	else if (currJoyMode[1] < HIDE_KEYBOARD)DrawSurfaceRectBottom(KeySurface, 0, 320, 0, 240);
@@ -544,8 +567,9 @@ void Init3DS()
 	debugFile = fmemopen(debugBuf, 0x10000, "r+");
 	//Verbose = 0x2C;	/*  0x02:VDP Command,  0x04:Disk IO,  0x8:MAP ROM,  0x20:IO Port,  0x40:MSXTurboR */
 	//Verbose = 0x20;
-	Verbose = 0xA0;
+	//Verbose = 0xA0;
 	//Verbose = 0x44;
+	Verbose = 1;
 	//Verbose = 9;
 #endif // DEBUG_LOG
 }
@@ -606,6 +630,9 @@ void BrowseROM(int slotid, int browsetype)
 			break;
 		case BROWSE_IMG:
 			msgstr = "[Select a reference image file]";
+			break;
+		case BROWSE_DER:
+			msgstr = "[Select a der copyprotect file]";
 			break;
 #ifdef HDD_NEXTOR
 		case BROWSE_HDD:
@@ -816,6 +843,7 @@ void BrowseROM(int slotid, int browsetype)
 						{
 							DiskStr[slotid] = currstr;
 							DiskRawStr[slotid] = cfstring;
+							isLoadDer = 0;
 							AddRecentlyList(savestr, ".DSK");
 							//AddRecentlyList(cfstring, ".DSK");
 						}
@@ -831,7 +859,7 @@ void BrowseROM(int slotid, int browsetype)
 					if (CASStr != cfstring || zipfileStr.length() > 0)
 					{
 #ifdef TURBO_R
-						if(MODEL(MSX_MSXTR))ShowMessage3DS("MSXTurboR doesn't support cassette tapes.", "Chnage MSX Hardware Model and try again.");
+						if(MODEL(MSX_MSXTR))ShowMessage3DS("MSXTurboR doesn't support cassette tapes.", "Change MSX Hardware Model and try again.");
 #endif // TURBO_R
 						if (ChangeTape(cfstring.c_str()))
 						{
@@ -844,6 +872,13 @@ void BrowseROM(int slotid, int browsetype)
 				}
 				else if (strcasecmp(extname, ".PNG") == 0 || strcasecmp(extname, ".JPG") == 0 || strcasecmp(extname, ".JPEG") == 0 || strcasecmp(extname,".BMP")==0)
 				{
+					if (IsMenuImposeScreenShot)
+					{
+						ScreenShotSurface = IMG_Load(cfstring.c_str());
+						InitScreenShotTexture(ScreenShotSurface);
+						IsImposeScreenShot = true;
+						return;
+					}
 					ScreenShotSurface = IMG_Load(cfstring.c_str());
 					ScreenShotOffx = ScreenShotOffy = 0;
 					IsScreenShot = true;
@@ -954,6 +989,11 @@ void BrowseROM(int slotid, int browsetype)
 						IPSPatchSize = 0;
 						ResetMSX(Mode, RAMPages, VRAMPages);
 					}
+					return;
+				}
+				else if (strcasecmp(extname, ".DER") == 0)
+				{
+					loadDerFile(cfstring.c_str());
 					return;
 				}
 			}
@@ -1129,6 +1169,22 @@ void BrowseMCF()
 }
 
 
+void loadDerFile(const char* derName)
+{
+	FILE* derFile;
+	int derSize;
+	derFile = zipfopen(derName, "rb");
+	fseek(derFile, 0, SEEK_END);
+	derSize = ftell(derFile);
+	if (derBuf == NULL)derBuf = (unsigned char*)malloc(derSize);
+	else derBuf = (unsigned char*)realloc(derBuf, derSize);
+	rewind(derFile);
+	fread(derBuf, 1, 20, derFile);
+	derSize = fread(derBuf, 1, derSize, derFile);
+	isLoadDer = 1;
+}
+
+
 int CreateBlankDisk(int slotid)
 {
 	std::string newdskstring = latestPath.size() < 2 ? "/FMSX3DS/fMSX.dsk" : latestPath;
@@ -1178,6 +1234,7 @@ int CreateBlankDisk(int slotid)
 			DiskStr[slotid] = newdskstring;
 			//DiskStr[slotid] = "/FMSX3DS/SAVEDISK/" + filestr;
 			DiskRawStr[slotid] = newdskstring;
+			isLoadDer = 0;
 			//AddRecentlyList("/FMSX3DS/SAVEDISK/" + filestr, ".DSK");
 			AddRecentlyList(newdskstring,".DSK");
 		}
@@ -1556,6 +1613,7 @@ void BrowseLoadRecently(int slotid, int browsetype)
 							{
 								DiskStr[slotid] = currstr;
 								DiskRawStr[slotid] = cfstring;
+								isLoadDer = 0;
 								//AddRecentlyList(cfstring, ".DSK");
 								AddRecentlyList(savestr, ".DSK");
 							}
@@ -2900,7 +2958,7 @@ int OpenDirectoryDir(std::string dirstr, int browsetype)
 				const char* extsname = &pathent->d_name[strlen(pathent->d_name) - 3];
 				if (
 					((strcasecmp(extname, ".ROM") == 0 || strcasecmp(extname, ".MX1") == 0 || strcasecmp(extname, ".MX2") == 0) && (browsetype & BROWSE_ROM)) ||
-					(strcasecmp(extname, ".DSK") == 0 && (browsetype & BROWSE_DISK)) ||
+					((strcasecmp(extname, ".DSK") == 0 || strcasecmp(extname, ".DER") == 0) && (browsetype & BROWSE_DISK)) ||
 #if defined(HDD_NEXTOR) || defined(HDD_IDE)
 					(strcasecmp(extname, ".DSK") == 0 && (browsetype & BROWSE_HDD)) ||
 #endif // HDD_NEXTOR	HDD_IDE
@@ -3324,8 +3382,14 @@ void systemMenu()
 					ChangeDisk(slotid, 0);
 					DiskStr[slotid] = "";
 					DiskRawStr[slotid] = "";
+					isLoadDer = 0;
 					return;
 				}
+			}
+			else if(selectmenu== "[Load der file]")
+			{
+				BrowseROM(0, BROWSE_DER);
+				return;
 			}
 #ifdef HDD_NEXTOR
 			else if (selectmenu == "[Load HardDisk]")
@@ -3485,6 +3549,23 @@ void systemMenu()
 			{
 				BrowseROM(0, BROWSE_IMG);
 			}
+#ifdef SUPERIMPOSE
+			else if (selectmenu == "[Load Reference Image](Super Impose)")
+			{
+				IsMenuImposeScreenShot = true;
+				BrowseROM(0, BROWSE_IMG);
+				IsMenuImposeScreenShot = false;
+			}
+			else if (selectmenu == "[Close Reference Image]")
+			{
+				IsScreenShot = false;
+				IsImposeScreenShot = false;
+			}
+			else if(selectmenu == "[Move Reference Image]")
+			{
+				MoveReferenceImageImpose();
+			}
+#endif // SUPERIMPOSE
 			else if (selectmenu == "[Change ROM Mapper]")
 			{
 				std::vector<char*> menuvec;
@@ -3576,6 +3657,27 @@ void systemMenu()
 				ResetMSX(Mode, RAMPages, VRAMPages);
 				return;
 			}
+			else if(selectmenu == "[Load Ese RAM 512k ROM]")
+			{
+				LoadCart("eseram512A", 0, MAP_MEGASCSI);
+				ResetMSX(Mode, RAMPages, VRAMPages);
+				return;
+			}
+#ifdef VDP_V9990
+#ifdef DUAL_SCREEN
+			else if(selectmenu == "[V9990 Dual Screen]")
+			{
+				V9990DualScreen = BrowseInt("[V9990 Dual Screen]", OptionOffOn, V9990DualScreen, 0, false);
+				if (!V9990DualScreen)V9990Dual &= 0xFD;
+				else
+				{
+					DrawMessage("fMSX3DS running on dual screen mode now.", "Touch screen to end.", 10, 50, 1000, true);
+					if (V9990Active)V9990Dual |= 2;
+					return;
+				}
+			}
+#endif // DUAL_SCREEN
+#endif // VDP_V9990
 #ifdef USE_OVERCLOCK
 			else if (selectmenu == "[OverClockR800(Unsafe)]")
 			{
@@ -4658,7 +4760,7 @@ SDL_Surface* SDLSurfaceExtract(SDL_Surface* surface, int xmin, int ymin, int wid
 
 
 /* Based on blagSNES.(CopyBitmapToTexture() in main.c). */
-void SDLSurfaceToC3DTexData(SDL_Surface* surface, void* data, int swidth, int sheight)
+void SDLSurfaceToC3DTexData(SDL_Surface* surface, void* data, int swidth, int sheight, byte Alpha)
 {
 	int dwidth = surface->w, dheight = surface->h;
 	int i, j, v0;
@@ -4677,7 +4779,8 @@ void SDLSurfaceToC3DTexData(SDL_Surface* surface, void* data, int swidth, int sh
 			v0 = ((j&0x1F8)<<3) + ((i&0xF8)<<3)*64 + (j & 0x01) + ((i & 0x01) << 1) + ((j & 0x02) << 1) + ((i & 0x02) << 2) + ((j & 0x04) << 2)
 			 + ((i&0x04)<<3);
 
-			u32 px = (r << 24) | (g << 16) | (b << 8) | 0xFF;
+			//u32 px = (r << 24) | (g << 16) | (b << 8) | 0xFF;
+			u32 px = (r << 24) | (g << 16) | (b << 8) | Alpha;
 			scrbuf[v0] = px;
 		}
 	}
@@ -4688,6 +4791,84 @@ void DrawHUD()
 {
 	C2D_DrawImageAt(HUDImage, 280.0f, 150.0f, 1.0f, NULL, 1.0f, 1.0f);
 }
+
+
+#ifdef SUPERIMPOSE
+void C3DTextureChangeAlpha(C3D_Tex tex, uint alpha)
+{
+	int i,j,v0;
+	u32* scrbuf = (u32*)tex.data;
+	int dwidth = tex.width;
+	int dheight = tex.height;
+	for (i = 0; i < dheight; i++)
+	{
+		for (j = 0; j < dwidth; j++)
+		{
+			v0 = ((j & 0x1F8) << 3) + ((i & 0xF8) << 3) * 64 + (j & 0x01) + ((i & 0x01) << 1) + ((j & 0x02) << 1) + ((i & 0x02) << 2) + ((j & 0x04) << 2)
+				+ ((i & 0x04) << 3);
+			u32 px = scrbuf[v0] & (~0xFF);
+			scrbuf[v0] = px | alpha;
+		}
+	}
+}
+
+
+void MoveReferenceImageImpose(void)
+{
+	while (aptMainLoop())
+	{
+		bool IsAPress = false, IsLPress = false, IsRPress = false, needRedraw = true;
+		if (needRedraw == true)
+		{
+			C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+			C2D_TargetClear(BottomRenderTartget, Color_Screen);
+			C2D_SceneBegin(BottomRenderTartget);
+			DrawTextTranslate("Use pad to translate reference image.", textSize, 0, 1, fontSize, fontSize, Color_White);
+			DrawTextTranslate("Use L or R key to change scale.", textSize, textSize * 2, 1, fontSize, fontSize, Color_White);
+			DrawTextTranslate("Press start to exit to menu.", textSize, textSize * 3, 1, fontSize, fontSize, Color_White);
+			needRedraw = false;
+			C3D_FrameEnd(0);
+		}
+		SDL_Delay(10);
+		hidScanInput();
+		u32 kDown = hidKeysDown();
+		u32 kHeld = hidKeysHeld();
+		if (kDown & KEY_B)return;
+		if (kDown & KEY_A)IsAPress = true;
+		if (kDown & KEY_START)return;
+		if (kHeld & KEY_UP)
+		{
+			ImposeRefY -= 0.1f;
+			RefreshScreen();
+		}
+		if (kHeld & KEY_DOWN)
+		{
+			ImposeRefY += 0.1f;
+			RefreshScreen();
+		}
+		if (kHeld & KEY_LEFT)
+		{
+			ImposeRefX -= 0.1f;
+			RefreshScreen();
+		}
+		if (kHeld & KEY_RIGHT)
+		{
+			ImposeRefX += 0.1f;
+			RefreshScreen();
+		}
+		if (kHeld & KEY_L)
+		{
+			ImposeRefSize -= 0.001f;
+			RefreshScreen();
+		}
+		if (kHeld & KEY_R)
+		{
+			ImposeRefSize += 0.001f;
+			RefreshScreen();
+		}
+	}
+}
+#endif // SUPERIMPOSE
 
 
 void AddRecentlyList(std::string str, const char* ftype)
@@ -5037,7 +5218,20 @@ void LoadOption(bool IsInit)
 	{
 		MSX0_I2CA = optionItem[optionMap["MSX0 Device A(i2c_a)"]].currentIdx;
 	}
+	MSX0_ANALOGOUT = optionItem[optionMap["MSX0 Analog Output"]].currentIdx;
 #endif // _MSX0
+#ifdef SUPERIMPOSE
+	if (SuperimposeTransp != optionItem[optionMap["SuperImpose Transparent"]].currentIdx)
+	{
+		SuperimposeTransp = optionItem[optionMap["SuperImpose Transparent"]].currentIdx;
+		if (ScreenShotSurface != NULL)
+		{
+			int transpi = 255 - SuperimposeTransp * 26;
+			transpi = transpi>=0 ? transpi : 0;
+			ChangeScreenImposeTransparent(transpi);
+		}
+	}
+#endif // SUPERIMPOSE
 	AutoFrameSkip = optionItem[optionMap["Auto Frame Skip"]].currentIdx;
 	ScreenRes = optionItem[optionMap["Screen Strech"]].currentIdx;
 	if (ScreenFilter != optionItem[optionMap["Screen Filter"]].currentIdx)
