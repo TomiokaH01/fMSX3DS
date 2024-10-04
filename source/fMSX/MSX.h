@@ -29,6 +29,7 @@
 #include <stdio.h>
 
 #include "3DSConfig.h"
+#include "FDC_TC8566AF.h"
 
 /** INLINE ***************************************************/
 /** C99 standard has "inline", but older compilers've used  **/
@@ -120,7 +121,7 @@ extern "C" {
 #define MAP_ESESCC     29   /* Ese SCC                       */
 #define MAP_SYNTHE     30   /* Konami's Synthesizer          */
 #define MAP_ASCII16Big 31   /* ASCII16 over 2MB size.        */
-#define MAP_MEGASCSI   32   /* Ese RAM/Mega SCSI             */ 
+#define MAP_MEGASCSI   32   /* Ese RAM/Mega SCSI             */
 //#define MAP_PANSONIC   31   /* Firmware ROM for Panasonic MSX*/
 #define MAP_GUESS      33   /* Guess mapper automatically    */
 
@@ -219,7 +220,7 @@ void InitV9990(void);
 #define MAXSLOTS    9       /* Number of cartridge slots     */
 //#define MAXSLOTS    10       /* Number of cartridge slots     */
 #define MAXCARTS    2       /* Number of user cartridges     */
-#define MAXMAPPERS  32       /* Total defined MegaROM mappers */
+#define MAXMAPPERS  MAP_GUESS-1       /* Total defined MegaROM mappers */
 #else
 #define MAXSLOTS    6       /* Number of cartridge slots     */
 #define MAXCARTS    2       /* Number of user cartridges     */
@@ -308,6 +309,9 @@ extern char IsDebug;
 extern byte NewScrMode;
 extern char DiskWrited[];
 extern char DiskAccess[];
+#ifdef UPD_FDC
+extern unsigned char FDCEmuType;
+#endif // UPD_FDC
 #include "MCF.h"
 extern int MCFCount;              /* Size of MCFEntries[]   */
 extern MCFEntry MCFEntries[MAXCHEATS];    /* Entries from .MCF file */

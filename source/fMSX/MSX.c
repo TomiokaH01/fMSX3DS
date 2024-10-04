@@ -312,6 +312,9 @@ int firstScanLine = 0;
 unsigned char IsShowFPS = 1;
 unsigned char IsHardReset = 1;
 unsigned char UseInterlace = 0;
+#ifdef UPD_FDC
+unsigned char FDCEmuType = 0;
+#endif // UPD_FDC
 int regionid = 0;
 int cbiosReg = 0;
 unsigned char ForceCBIOS = 0;
@@ -416,6 +419,12 @@ unsigned char* derBuf;
                                 if ((VDPIOTimerCnt - CPU.ICount) < 48)CPU.ICount = VDPIOTimerCnt - 60;  \
                                 VDPIOTimerCnt = CPU.ICount;}
 #endif // TURBO_R
+
+#ifdef UPD_FDC
+TC8566AF TCFDC;
+DiskChanged[2];
+#endif // UPD_FDC
+
 
 #ifdef _MSX0
 unsigned char UseMSX0 = 0;
@@ -857,7 +866,15 @@ int StartMSX(int NewMode, int NewRAMPages, int NewVRAMPages)
 #endif // _MSX0
 
 #ifdef TURBO_R
-    if (MODEL(MSX_MSXTR))LoadMSXMusicTurboR();
+    if (MODEL(MSX_MSXTR))
+    {
+        LoadMSXMusicTurboR();
+#ifdef UPD_FDC
+        ResetTC8566AF(&TCFDC, FDD, TC8566AF_INIT);
+        if (Verbose & 0x04)TCFDC.Verbose = 1;
+        DiskChanged[0] = DiskChanged[1] = 0;
+#endif // UPD_FDC
+    }
     else
     {
         J = 4;
@@ -865,6 +882,7 @@ int StartMSX(int NewMode, int NewRAMPages, int NewVRAMPages)
     }
 
     J = 5;
+
     ///* If MSX2 or better, load PAINTER cartridge */
     //if (!MODEL(MSX_MSX1))
     //{
@@ -1043,6 +1061,10 @@ void TrashMSX(void)
 
     /* Eject disks, free disk buffers */
     Reset1793(&FDC, FDD, WD1793_EJECT);
+
+#ifdef UPD_FDC
+    if (MODEL(MSX_MSXTR)) ResetTC8566AF(&TCFDC, FDD, TC8566AF_EJECT);
+#endif // UPD_FDC
 
     /* Close printer output */
     ChangePrinter(0);
@@ -1460,6 +1482,9 @@ int ResetMSX(int NewMode, int NewRAMPages, int NewVRAMPages)
                     }
                 }
             }
+
+            //if (MODEL(MSX_MSXTR))Mode &= ~MSX_PATCHBDOS;
+            //else Mode |= MSX_PATCHBDOS;
             break;
 #endif // TURBO_R
 
@@ -1477,6 +1502,21 @@ int ResetMSX(int NewMode, int NewRAMPages, int NewVRAMPages)
             if (Verbose) printf("Failed changing to '%s' directory!\n", WorkDir);
         }
     }
+
+#ifdef UPD_FDC
+    switch (FDCEmuType)
+    {
+    case 0:
+        NewMode |= MSX_PATCHBDOS;
+        break;
+    case 1:
+        if ((NewMode & MSX_MODEL) == MSX_MSXTR)NewMode &= ~MSX_PATCHBDOS;
+        else NewMode |= MSX_PATCHBDOS;
+        break;
+    default:
+        break;
+    }
+#endif // UPD_FDC
 
     /* If hardware model changed ok, patch freshly loaded BIOS */
     if ((Mode ^ NewMode) & MSX_MODEL)
@@ -1786,6 +1826,10 @@ int ResetMSX(int NewMode, int NewRAMPages, int NewVRAMPages)
     /* Reset floppy disk controller */
     Reset1793(&FDC, FDD, WD1793_KEEP);
 
+#ifdef UPD_FDC
+    if (MODEL(MSX_MSXTR)) ResetTC8566AF(&TCFDC, FDD, TC8566AF_KEEP);
+#endif // UPD_FDC
+
     /* Reset VDP */
     memcpy(VDP, VDPInit, sizeof(VDP));
     memcpy(VDPStatus, VDPSInit, sizeof(VDPStatus));
@@ -1978,7 +2022,11 @@ int ResetMSX(int NewMode, int NewRAMPages, int NewVRAMPages)
 byte RdZ80(word A)
 {
 #ifdef TURBO_R
+#ifdef UPD_FDC
+    if(MODEL(MSX_MSXTR))
+#else
     if (CPU.User & 0x01)
+#endif // UPD_FDC
     {
         byte J, I, PS, SS;
         J = A >> 14;
@@ -2026,9 +2074,11 @@ byte RdZ80(word A)
                 case 3:
                     if ((A & 0xFFF0) == 0x7FF0)
                     {
+#ifndef UPD_FDC
                         if (MODEL(MSX_MSXTR))
                         {
-                            printf("Panasonic Mapper Read [%04Xh]\n", A);
+#endif // !UPD_FDC
+                            if(Verbose&0x40)printf("Panasonic Mapper Read [%04Xh]\n", A);
                             if (!(A & 0x08))
                             {
                                 byte J = A & 0x07;
@@ -2037,8 +2087,28 @@ byte RdZ80(word A)
                             }
                             if (A == 0x7FF8)return (PanaMapper3 & 0x10) ? PanaMapper2 : 0xFF;
                             if (A == 0x7FF9)return (PanaMapper3 & 0x08) ? PanaMapper3 : 0xFF;
+#ifndef UPD_FDC
                         }
+#endif // !UPD_FDC
                     }
+                    break;
+                case 2:     /* Disk ROM */
+#ifdef UPD_FDC
+                    switch (A&0x3FFF)
+                    {
+                    case 0x3FF1:
+                        J = 3 | (!DiskChanged[0] ? 0x10 : 0) | (!DiskChanged[1] ? 0x20 : 0);
+                        DiskChanged[0] = 0;
+                        DiskChanged[1] = 0;
+                        return J;
+                    case 0x3FF4:
+                        return ReadTC8566AF(&TCFDC, 4);
+                    case 0x3FF5:
+                        return ReadTC8566AF(&TCFDC, 5);
+                    default:
+                        return(RAM[A >> 13][A & 0x1FFF]);
+                    }
+#endif // UPD_FDC
                     break;
                 default:
                     //CPU.ICount -= 2;
@@ -2205,7 +2275,11 @@ void WrZ80(word A, byte V)
     /* 7F80h..7F87h Arabic DiskROM    */
     /* 7FB8h..7FBFh SV738/TechnoAhead */
 #ifdef _3DS
+#ifdef UPD_FDC
+    if (((A & 0x3F88) == 0x3F88) && (PSL[A >> 14] == 3) && (SSL[A >> 14] == 2) && !(MODEL(MSX_MSXTR)))
+#else
     if (((A & 0x3F88) == 0x3F88) && (PSL[A >> 14] == 3) && (SSL[A >> 14] == 2))
+#endif // UPD_FDC
 #else
     if (((A & 0x3F88) == 0x3F88) && (PSL[A >> 14] == 3) && (SSL[A >> 14] == 1))
 #endif // _3DS
@@ -3473,6 +3547,22 @@ void MapROM(register word A, register byte V)
                     }
                 }
                 if ((A < 0x4000) || (A > 0xBFFF)) return;
+#ifdef UPD_FDC
+                switch (A&0x3FFF)
+                {
+                case 0x3FF2:
+                    DiskAccess[V & 0x01] = 3;
+                    WriteTC8566AF(&TCFDC, 2, V);
+                    return;
+                case 0x3FF3:
+                    return;
+                case 0x3FF5:
+                    WriteTC8566AF(&TCFDC, 5, V);
+                    return;
+                default:
+                    break;
+                }
+#endif // UPD_FDC
                 J = (A & 0x8000) >> 14;
                 /* Switch ROM pages */
                 V = (V << 1) & 0x07;
@@ -3488,6 +3578,7 @@ void MapROM(register word A, register byte V)
                         RAM[3] = MemMap[3][2][3] = RAM[2] + 0x2000;
                         MSXDOS2Mapper = V;
                         if (Verbose & 0x40)printf("MSX-DOS Change %d\n", V);
+                        //ResetTC8566AF(&TCFDC, FDD, TC8566AF_KEEP);
                     }
                 }
                 //}
@@ -5612,6 +5703,10 @@ byte ChangeDisk(byte N, const char* FileName)
     /* Reset FDC, in case it was running a command */
     Reset1793(&FDC, FDD, WD1793_KEEP);
 
+#ifdef UPD_FDC
+    if (MODEL(MSX_MSXTR)) ResetTC8566AF(&TCFDC,FDD,TC8566AF_KEEP);
+#endif // UPD_FDC
+
     /* Eject disk if requested */
     if (!FileName) { EjectFDI(&FDD[N]); return(1); }
 
@@ -5620,6 +5715,9 @@ byte ChangeDisk(byte N, const char* FileName)
     {
         /* If first disk, also try loading state */
         if (NeedState) FindState(FileName);
+#ifdef UPD_FDC
+        DiskChanged[N] = 1;
+#endif // UPD_FDC
         /* Done */
         return(1);
     }
@@ -6407,6 +6505,10 @@ byte ChangeDiskWithFormat(byte N, const char* FileName, int Format)
     /* Reset FDC, in case it was running a command */
     Reset1793(&FDC, FDD, WD1793_KEEP);
 
+#ifdef UPD_FDC
+    if (MODEL(MSX_MSXTR))ResetTC8566AF(&TCFDC, FDD, TC8566AF_KEEP);
+#endif // UPD_FDC
+
     /* Eject disk if requested */
     if (!FileName) { EjectFDI(&FDD[N]); return(1); }
 
@@ -6415,6 +6517,9 @@ byte ChangeDiskWithFormat(byte N, const char* FileName, int Format)
     {
         /* If first disk, also try loading state */
         if (NeedState) FindState(FileName);
+#ifdef UPD_FDC
+        DiskChanged[N] = 1;
+#endif // UPD_FDC
         /* Done */
         return(1);
     }
@@ -6620,7 +6725,6 @@ void VDPSync()
     }
 }
 
-
 void verboseFDC()
 {
     FDC.Verbose = 1;
@@ -6699,6 +6803,10 @@ void UpdateTurboRTimer(int val)
     R800TimerCnt += val;
     PCMTimerCnt += val + 59;
     VDPIOTimerCnt += val;
+#ifdef UPD_FDC
+    if(TCFDC.Wait)TCFDC.CntTimer += val;
+#endif // UPD_FDC
+
 #ifdef AUDIO_SYNC
     audioCycleCnt += val;
 #endif // AUDIO_SYNC
@@ -7206,10 +7314,6 @@ void V9990Out(register byte R, register byte V)
 
 word LoopZ80_V9990(Z80* R)
 {
-    static byte BFlag = 0;
-    static byte BCount = 0;
-    static int  UCount = 0;
-    static byte ACount = 0;
     static byte Drawing = 0;
     register int J;
 
