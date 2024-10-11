@@ -1707,12 +1707,6 @@ int ResetMSX(int NewMode, int NewRAMPages, int NewVRAMPages)
     CPU.IPeriod = CPU_H240;
     CPU.IAutoReset = 0;
 
-#ifdef DEBUG
-    CPU.Trace = 0;
-    CPU.TrapBadOps = 0;
-#endif // DEBUG
-
-
     /* Numbers of RAM/VRAM pages should be power of 2 */
     for (J = 1; J < NewRAMPages; J <<= 1);
     NewRAMPages = J;

@@ -286,6 +286,7 @@ case 0x4010:
     {
         if (derBuf[R->DE.W >> 3] & (0x80 >> (R->DE.W & 0x07)))
         {
+            if (Verbose & 0x04) printf("CRC Error Sector %d \n", R->DE.W);
             R->AF.W = 0x0401; return;
         }
     }
@@ -840,7 +841,7 @@ case 0x4160:
         {
             for (J = 0; J < 512; J++) Buf[J] = RdZ80(Addr++);
 
-            if (HDDWrite(2, Buf, Sector, 1, 1))R->BC.B.h--;
+            if (HDDWrite(2, Buf, Sector, 32768, 1))R->BC.B.h--;
             else
             {
                 R->AF.B.h = 0xFC;
@@ -856,7 +857,7 @@ case 0x4160:
         for (Sector = (int)RdZ80(R->DE.W) | ((int)RdZ80(R->DE.W + 1) << 8) | ((int)RdZ80(R->DE.W + 2) << 16) 
             | ((int)RdZ80(R->DE.W + 3) << 24); Count--; Sector++) /* READ */
         {
-            if(HDDRead(2, Buf, Sector, 1,1))R->BC.B.h--;
+            if(HDDRead(2, Buf, Sector, 32768,1))R->BC.B.h--;
             else
             {
                 R->AF.B.h = 0xFC;
