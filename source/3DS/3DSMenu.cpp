@@ -128,10 +128,6 @@ unsigned char Stereo3DMode = 0;
 unsigned char OldIs3DNow = 0;
 unsigned char Is3DNow = 0;
 #endif // USE_3D
-#ifdef SUPERIMPOSE
-unsigned char SuperimposeTransp = 5;
-#endif // SUPERIMPOSE
-
 
 #ifdef DEBUG_LOG
 #define MAXDEBUG	1024
@@ -164,6 +160,7 @@ std::vector<char*> OptionRAMSize = { "64K", "128K", "256K", "512K", "1MB", "2MB"
 std::vector<char*> OptionOverClock = { "0(None)","x2(Unsafe)", "x4(Unsafe)" };
 #endif // USE_OVERCLOCK
 std::vector<char*> OptionMSXType = {"MSX","MSX2","MSX2Plus","MSXTurboR"};
+std::vector<char*> OptionFDCEmu = { "None","TurboR only" };
 std::vector<char*> OptinJoyPort = { "None", "JoyStick","Mouse as Joystick","Mouse","Arkanoid","TouchPad" };
 std::vector<char*> OptionPrinter = {"None", "PrintToFile", "VoiceBox", "+PCM", "COVOX"};
 std::vector<char*> OptionStereo3D = { "None", "Anaglyph", "Anaglyph(Color)" };
@@ -197,6 +194,7 @@ static std::vector<OptionItem> optionItem =
 	{"Force Japanese BIOS",0,0,0,OptionOffOn},
 	{"C-BIOS Region",2,2,2,OptionCBIOSReg},
 	{"Force C-BIOS",0,0,0,OptionOffOn},
+	{"FDC Emulation",1,1,1,OptionFDCEmu},
 	{"Skip MSX2 Plus boot screen",0,0,0,OptionOffOn},
 	{"Keyboad Region",0,0,0,OptionLanguage},
 	{"RAM Size",3,3,3,OptionRAMSize},
@@ -227,9 +225,6 @@ static std::vector<OptionItem> optionItem =
 	{"Memory systemmenu cursor",0,0,0,OptionOffOn },
 #endif // MEMORY_CURSOR_POS
 	{"ShowFPS",0,0,0,OptionOffOn},
-#ifdef SUPERIMPOSE
-	{"SuperImpose Transparent",5,5,5,OptionNum},
-#endif // SUPERIMPOSE
 	{"New3DS Boost",0,1,0,OptionOnOff},
 	{"",0,0,0,OptionNull},
 	{"<Sound Option>",0,0,0,OptionNull},
@@ -391,12 +386,16 @@ static std::vector<std::string> menuItem =
 	"[Save Screen Shot]",
 	"[Load Reference Image]",
 #ifdef SUPERIMPOSE
-	"[Load Reference Image](Super Impose)",
-	"[Move Reference Image]",
+	"[Load Reference Image](Overlay)",
+	"[Adjust Reference Image]",
 	"[Close Reference Image]",
 #endif // SUPERIMPOSE
-	"[Fast Forward]",
+#ifdef DUAL_SCREEN
 	"[V9990 Dual Screen]",
+#endif // DUAL_SCREEN
+	"",
+	"<Unsafe Actions>",
+	"[Fast Forward]",
 	"[OverClockR800(Unsafe)]",
 	"[Cheat]",
 #ifdef DEBUG_ENABLE
@@ -416,6 +415,7 @@ bool IsImposeScreenShot = false;
 float ImposeRefX = 0;
 float ImposeRefY = 0;
 float ImposeRefSize = 1.0f;
+int ImposeTransP = 128;
 #endif // SUPERIMPOSE
 bool IsMenuImposeScreenShot = false;
 bool ShowDebugMsg3DS = false;
@@ -565,11 +565,11 @@ void Init3DS()
 	//debugFile = fopen("/FMSX3DS/DebugLog.txt", "w");
 	//debugFile = open_memstream(&debugBuf, &debugBufSize);
 	debugFile = fmemopen(debugBuf, 0x10000, "r+");
-	//Verbose = 0x2C;	/*  0x02:VDP Command,  0x04:Disk IO,  0x8:MAP ROM,  0x20:IO Port,  0x40:MSXTurboR */
+	//Verbose = 0x2C;	/*  0x02:VDP Command,  0x04:Disk IO,  0x8:MAP ROM,  0x20:IO Port,  0x40:MSXTurboR , 0x80:V9990 */
 	//Verbose = 0x20;
 	//Verbose = 0xA0;
-	//Verbose = 0x44;
-	Verbose = 1;
+	//Verbose = 0x04;
+	Verbose = 0x44;
 	//Verbose = 9;
 #endif // DEBUG_LOG
 }
@@ -877,11 +877,13 @@ void BrowseROM(int slotid, int browsetype)
 						ScreenShotSurface = IMG_Load(cfstring.c_str());
 						InitScreenShotTexture(ScreenShotSurface);
 						IsImposeScreenShot = true;
+						IsScreenShot = false;
 						return;
 					}
 					ScreenShotSurface = IMG_Load(cfstring.c_str());
 					ScreenShotOffx = ScreenShotOffy = 0;
 					IsScreenShot = true;
+					IsImposeScreenShot = false;
 					return;
 				}
 				else if (strcasecmp(extname, ".MCF") == 0)
@@ -2958,7 +2960,8 @@ int OpenDirectoryDir(std::string dirstr, int browsetype)
 				const char* extsname = &pathent->d_name[strlen(pathent->d_name) - 3];
 				if (
 					((strcasecmp(extname, ".ROM") == 0 || strcasecmp(extname, ".MX1") == 0 || strcasecmp(extname, ".MX2") == 0) && (browsetype & BROWSE_ROM)) ||
-					((strcasecmp(extname, ".DSK") == 0 || strcasecmp(extname, ".DER") == 0) && (browsetype & BROWSE_DISK)) ||
+					(strcasecmp(extname, ".DSK") == 0 && (browsetype & BROWSE_DISK)) ||
+					(strcasecmp(extname, ".DER") == 0 && (browsetype & BROWSE_DER)) ||
 #if defined(HDD_NEXTOR) || defined(HDD_IDE)
 					(strcasecmp(extname, ".DSK") == 0 && (browsetype & BROWSE_HDD)) ||
 #endif // HDD_NEXTOR	HDD_IDE
@@ -3550,20 +3553,23 @@ void systemMenu()
 				BrowseROM(0, BROWSE_IMG);
 			}
 #ifdef SUPERIMPOSE
-			else if (selectmenu == "[Load Reference Image](Super Impose)")
+			else if (selectmenu == "[Load Reference Image](Overlay)")
 			{
 				IsMenuImposeScreenShot = true;
 				BrowseROM(0, BROWSE_IMG);
-				IsMenuImposeScreenShot = false;
+				ImposeRefSize = 1.0f;
+				ImposeRefX = 0;
+				ImposeRefY = 0;
+				ImposeTransP = 128;
 			}
 			else if (selectmenu == "[Close Reference Image]")
 			{
 				IsScreenShot = false;
 				IsImposeScreenShot = false;
 			}
-			else if(selectmenu == "[Move Reference Image]")
+			else if(selectmenu == "[Adjust Reference Image]")
 			{
-				MoveReferenceImageImpose();
+				AdjustReferenceImageImpose();
 			}
 #endif // SUPERIMPOSE
 			else if (selectmenu == "[Change ROM Mapper]")
@@ -4813,19 +4819,20 @@ void C3DTextureChangeAlpha(C3D_Tex tex, uint alpha)
 }
 
 
-void MoveReferenceImageImpose(void)
+void AdjustReferenceImageImpose(void)
 {
 	while (aptMainLoop())
 	{
-		bool IsAPress = false, IsLPress = false, IsRPress = false, needRedraw = true;
+		bool needRedraw = true;
 		if (needRedraw == true)
 		{
 			C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
 			C2D_TargetClear(BottomRenderTartget, Color_Screen);
 			C2D_SceneBegin(BottomRenderTartget);
-			DrawTextTranslate("Use pad to translate reference image.", textSize, 0, 1, fontSize, fontSize, Color_White);
+			DrawTextTranslate("Use pad to move reference image.", textSize, textSize, 1, fontSize, fontSize, Color_White);
 			DrawTextTranslate("Use L or R key to change scale.", textSize, textSize * 2, 1, fontSize, fontSize, Color_White);
-			DrawTextTranslate("Press start to exit to menu.", textSize, textSize * 3, 1, fontSize, fontSize, Color_White);
+			DrawTextTranslate("Use X or Y key to chnage transparent.", textSize, textSize * 3, 1, fontSize, fontSize, Color_White);
+			DrawTextTranslate("Press B or start to exit.", textSize, textSize * 4, 1, fontSize, fontSize, Color_White);
 			needRedraw = false;
 			C3D_FrameEnd(0);
 		}
@@ -4834,7 +4841,6 @@ void MoveReferenceImageImpose(void)
 		u32 kDown = hidKeysDown();
 		u32 kHeld = hidKeysHeld();
 		if (kDown & KEY_B)return;
-		if (kDown & KEY_A)IsAPress = true;
 		if (kDown & KEY_START)return;
 		if (kHeld & KEY_UP)
 		{
@@ -4866,6 +4872,20 @@ void MoveReferenceImageImpose(void)
 			ImposeRefSize += 0.001f;
 			RefreshScreen();
 		}
+		if (kHeld & KEY_X)
+		{
+			ImposeTransP = ImposeTransP > 254 ? 255 : ImposeTransP + 1;
+			ChangeScreenImposeTransparent(ImposeTransP);
+			RefreshScreen();
+		}
+		if (kHeld & KEY_Y)
+		{
+			ImposeTransP = ImposeTransP < 1 ? 0 : ImposeTransP - 1;
+			ChangeScreenImposeTransparent(ImposeTransP);
+			RefreshScreen();
+		}
+		BrowseHomeButton();
+		if (ExitNow == 1)return;
 	}
 }
 #endif // SUPERIMPOSE
@@ -5220,18 +5240,6 @@ void LoadOption(bool IsInit)
 	}
 	MSX0_ANALOGOUT = optionItem[optionMap["MSX0 Analog Output"]].currentIdx;
 #endif // _MSX0
-#ifdef SUPERIMPOSE
-	if (SuperimposeTransp != optionItem[optionMap["SuperImpose Transparent"]].currentIdx)
-	{
-		SuperimposeTransp = optionItem[optionMap["SuperImpose Transparent"]].currentIdx;
-		if (ScreenShotSurface != NULL)
-		{
-			int transpi = 255 - SuperimposeTransp * 26;
-			transpi = transpi>=0 ? transpi : 0;
-			ChangeScreenImposeTransparent(transpi);
-		}
-	}
-#endif // SUPERIMPOSE
 	AutoFrameSkip = optionItem[optionMap["Auto Frame Skip"]].currentIdx;
 	ScreenRes = optionItem[optionMap["Screen Strech"]].currentIdx;
 	if (ScreenFilter != optionItem[optionMap["Screen Filter"]].currentIdx)
@@ -5364,6 +5372,9 @@ void LoadOption(bool IsInit)
 		else if(regionid==2)Mode = (Mode & ~MSX_VIDEO) | MSX_PAL;
 		messageType = messageType > 1 ? messageType : 1;
 	}
+#ifdef UPD_FDC
+	FDCEmuType = optionItem[optionMap["FDC Emulation"]].currentIdx;
+#endif // UPD_FDC
 	if (KeyRegion != optionItem[optionMap["Keyboad Region"]].currentIdx)
 	{
 		KeyRegion = optionItem[optionMap["Keyboad Region"]].currentIdx;

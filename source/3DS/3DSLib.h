@@ -96,10 +96,6 @@ extern int V9KcurrLine;
 extern unsigned char overClockRatio;
 #endif // USE_OVERCLOCK
 
-#ifdef SUPERIMPOSE
-extern unsigned char SuperimposeTransp;
-#endif // SUPERIMPOSE
-
 #ifdef AUDIO_SYNC
 extern int audioCycleCnt;
 #endif // AUDIO_SYNC

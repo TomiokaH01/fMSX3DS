@@ -8,8 +8,11 @@
 #define TURBO_R	/* MSXturboR */
 /* Currently i get confused "_3DS" and "TURBO_R". You need define both of them.*/
 /* TODO: "_3DS" only covers Nintendo 3DS(libctru) related code only. */
+#define UPD_FDC		/* Emulate MSXTurboR FDC. */
 #define _MSX0
 #define VDP_V9990
+#define DUAL_SCREEN
+#define SUPERIMPOSE
 #define USE_OVERCLOCK
 //#define AUDIO_SYNC
 //#define HDD_NEXTOR

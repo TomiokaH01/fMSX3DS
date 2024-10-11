@@ -25,12 +25,20 @@ void ResetTC8566AF(register TC8566AF* D, FDIDisk* Disks, register unsigned char 
 	D->Status[1] = 0;
 	D->Status[2] = 0;
 	D->Status[3] = 0;
-    D->MainStatus = 0;
+    D->MainStatus = 0x20;   /* 0x20:NDM(Non DMA Mode) */
+    //D->MainStatus = 0;   /* 0x20:NDM(Non DMA Mode) */
 	D->Drive = 0;
 	D->Side = 0;
+    D->CylinderNumber = 0;
+    D->SectorNumber = 0;
 	D->Wait = 0;
 	D->Cmd = 0;
     D->CurrTrack = 0;
+    D->SectorsPerCylinder = 0;
+    D->Number = 0;
+    D->CommandCode = 0;
+    D->Phase = PHASE_IDLE;
+    D->PhaseStep = 0;
 
     D->Verbose = Verbose&0x04;
 
@@ -54,22 +62,6 @@ unsigned char ReadTC8566AF(register TC8566AF* D, register unsigned char A)
     {
     case 4:
         if (!(D->MainStatus & 0x80))D->MainStatus |= 0x80;      /* 0x80:RQM(Request for Master) */
-
-        //if ((!(D->MainStatus & 0x80)) && (D->Phase!=PHASE_DATATRANSFER))
-        //{
-        //    D->MainStatus |= 0x80;
-        //}
-        //if (!(D->MainStatus & 0x40))
-        //{
-        //    if ((D->Phase == PHASE_DATATRANSFER))D->MainStatus |= 0x80;
-        //    else D->MainStatus &= ~0x80;
-        //}
-        //else
-        //{
-        //    if ((D->Phase == PHASE_DATATRANSFER))D->MainStatus &= ~0x80;
-        //    else D->MainStatus |= 0x80;
-        //}
-
         return((D->MainStatus & ~0x20) | (D->Phase == PHASE_DATATRANSFER ? 0x20 : 0));  /* 0x20:NDM(Non DMA Mode) */
     case 5:
         switch (D->Phase)
@@ -78,27 +70,24 @@ unsigned char ReadTC8566AF(register TC8566AF* D, register unsigned char A)
             retval = 0xFF;
             if (D->Cmd == CMD_READ_DATA)
             {
-                if (D->Status[0] & 0x40)
-                {
-                    D->Phase = PHASE_RESULT;
-                    D->PhaseStep = 0;
-                    D->SectorOffset = 0;
-                    D->MainStatus &= 0x7F;
-                    D->Wait = 6;
-                    return retval;
-                }
+                //if (D->Status[0] & 0x40)
+                //{
+                //    D->Phase = PHASE_RESULT;
+                //    D->PhaseStep = 0;
+                //    D->SectorOffset = 0;
+                //    D->MainStatus &= 0x7F;
+                //    return retval;
+                //}
                 if (!D->Ptr)
                 {
                     D->Phase = PHASE_RESULT;
                     D->PhaseStep = 0;
                     D->SectorOffset = 0;
                 }
-                //if((int)(D->Ptr - D->Disk[D->Drive]->Data)<512)
                 else if (D->SectorOffset < 512)
                 {
                     if (isLoadDer)
                     {
-                        //int J = D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors * (D->Track[D->Drive] * D->Disk[D->Drive]->Sides + D->Side);
                         int J = D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors * (D->CurrTrack * D->Disk[D->Drive]->Sides + D->Side);
                         if (derBuf[J >> 3] & (0x80 >> (J & 0x07)))
                         {
@@ -109,7 +98,7 @@ unsigned char ReadTC8566AF(register TC8566AF* D, register unsigned char A)
                             D->Phase = PHASE_RESULT;
                             D->PhaseStep = 0;
                             D->SectorOffset = 0;
-                            return;
+                            return retval;
                         }
                     }
 
@@ -117,7 +106,6 @@ unsigned char ReadTC8566AF(register TC8566AF* D, register unsigned char A)
                     retval = D->Ptr[D->SectorOffset];
                     D->SectorOffset++;
                     if (D->SectorOffset == 512)
-                    //if((int)(D->Ptr-D->Disk[D->Drive]->Data)==512)
                     {
                         if (D->Verbose) printf("TC8566AF: DONE reading data\n");
                         D->Phase = PHASE_RESULT;
@@ -127,7 +115,6 @@ unsigned char ReadTC8566AF(register TC8566AF* D, register unsigned char A)
                 }
             }
             D->MainStatus &= 0x7F;
-            D->Wait = 6;
             return retval;
         case PHASE_RESULT:
             switch (D->Cmd)
@@ -154,8 +141,6 @@ unsigned char ReadTC8566AF(register TC8566AF* D, register unsigned char A)
                     D->MainStatus &= ~0x10; /* 0x10:CB(FDC Busy) */
                     D->MainStatus &= ~0x40; /* 0x40:DIO(Datat Input/Output) */
                     return D->Number;
-                default:
-                    break;
                 }
                 break;
             case CMD_SENSE_INTERRUPT_STATUS:
@@ -168,9 +153,6 @@ unsigned char ReadTC8566AF(register TC8566AF* D, register unsigned char A)
                     D->MainStatus &= ~0x10; /* 0x10:CB(FDC Busy) */
                     D->MainStatus &= ~0x40; /* 0x40:DIO(Datat Input/Output) */
                     return D->CurrTrack;
-                    //return D->Track[D->Drive];
-                default:
-                    break;
                 }
                 break;
             case CMD_SENSE_DEVICE_STATUS:
@@ -182,20 +164,13 @@ unsigned char ReadTC8566AF(register TC8566AF* D, register unsigned char A)
                     D->MainStatus &= ~0x40; /* 0x40:DIO(Datat Input/Output) */
                     return D->Status[3];
                     break;
-                default:
-                    break;
                 }
-                break;
-            default:
                 break;
             }
             break;
-        default:
-            break;
         }
-        return 0;
-    default:
-        break;
+        return 0xFF;
+        //return 0;
     }
     return 0xFF;
 }
@@ -211,7 +186,8 @@ D->Status[0] |= D->Disk[D->Drive] ? 0 : 0x80;
 /* 0x01:US0(Unit Select),0x02:US1(Unit Select), 0x10:TO(Track O), 0x04:HD(Head Address), 0x40:WP(Write Protected), 0x20:RY(Ready) */
 #define SETUP_STATUS3   D->Status[3] = V & (0x01 | 0x02);   \
 D->Status[3] |= !D->CurrTrack ? 0x10 : 0; \
-D->Status[3] |= D->Disk[D->Drive]->Sides>1 ? 0x04 : 0;   \
+D->Status[3] |= D->Side ? 0x04 : 0;   \
+D->Status[3] |= D->Disk[D->Drive]->Sides>1 ? 0x08 : 0;   \
 D->Status[3] |= D->ReadOnly ? 0x40 : 0; \
 D->Status[3] |= D->Disk[D->Drive] ? 0x20 : 0;
 
@@ -265,6 +241,8 @@ void WriteTC8566AF(register TC8566AF* D, register unsigned char A, register unsi
             case CMD_SEEK:
             case CMD_SPECIFY:
             case CMD_SENSE_DEVICE_STATUS:
+                //if (!D->Drive)D->MainStatus |= 0x01;
+                //else D->MainStatus |= 0x02;
                 break;
             default:
                 D->MainStatus &= ~0x10;  /* 0x10:CB(FDC Busy) */
@@ -296,7 +274,6 @@ void WriteTC8566AF(register TC8566AF* D, register unsigned char A, register unsi
                     break;
                 case 4:
                     D->Number = V;
-                    //D->Ptr = (V == 2 && (D->CommandCode & 0xC0) == 0x40) ? D->Disk[D->Drive]->Data + 0 : D->Disk[D->Drive]->Data + 512;
                     D->SectorOffset = (V == 2 && (D->CommandCode & 0xC0) == 0x40) ? 0 : 512;
                     break;
                 case  7:
@@ -309,33 +286,8 @@ void WriteTC8566AF(register TC8566AF* D, register unsigned char A, register unsi
                     if(D->Cmd == CMD_READ_DATA)
                     //if ((D->Cmd == CMD_READ_DATA) || (D->Cmd == CMD_WRITE_DATA))
                     {
-                        //if (D->Verbose) printf("TC8566AF: READ-SECTOR %c:%d:%d:%d\n", D->Drive + 'A', D->Disk[D->Drive]->Header[0]
-                        //    , D->Disk[D->Drive]->Header[1], D->SectorNumber);
-                        ///* Seek to the requested sector */
-                        //D->Ptr = SeekFDI(D->Disk[D->Drive], D->Disk[D->Drive]->Header[0], D->Track[D->Drive],
-                        //    D->Disk[D->Drive]->Header[0], D->Disk[D->Drive]->Header[1], D->SectorNumber);
-
-                        if (D->Verbose) printf("TC8566AF: Read-SECTOR %c:%d:%d:%d\n", D->Drive + 'A', D->Side
-                            , D->CylinderNumber, D->SectorNumber);
-
-                        //if (isLoadDer)
-                        //{
-                        //    int J = D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors * (D->Track[D->Drive] * D->Disk[D->Drive]->Sides + D->Side);
-                        //    if (derBuf[J >> 3] & (0x80 >> (J & 0x07)))
-                        //    {
-                        //        if (Verbose) printf("TC8566AF: ERROR Sector %d (Copy Protected)\n",J);
-                        //        D->Status[0] |= 0x40;   /* 0x40:IC(Interrupt Code) */
-                        //        D->Status[2] |= 0x20;   /* 0x20:DD(Data Error in Data Field ) */
-                        //        D->MainStatus |= 0x40;  /* 0x40:DIO(Data Input/Output) */
-                        //        D->Phase = PHASE_DATATRANSFER;
-                        //        D->PhaseStep = 0;
-                        //        return;
-                        //    }
-                        //}
-
-                        /* Seek to the requested sector */
-                        //D->Ptr = SeekFDI(D->Disk[D->Drive], D->Side, D->Track[D->Drive],
-                        //    D->Side, D->CylinderNumber, D->SectorNumber);
+                        if (D->Verbose) printf("TC8566AF: Read-SECTOR %c:%d:%d:%d Track:%d\n", D->Drive + 'A', D->Side
+                            , D->CylinderNumber, D->SectorNumber, D->CurrTrack);
 
                         /* Seek to the requested sector */
                         D->Ptr = SeekFDI(D->Disk[D->Drive], D->Side, D->CurrTrack,
@@ -351,12 +303,8 @@ void WriteTC8566AF(register TC8566AF* D, register unsigned char A, register unsi
                     }
                     else
                     {
-                        if (D->Verbose) printf("TC8566AF: Write-SECTOR %c:%d:%d:%d\n", D->Drive + 'A', D->Side
-                            , D->CylinderNumber, D->SectorNumber);
-                        // /* Seek to the requested sector */
-                        //D->Ptr = SeekFDI(D->Disk[D->Drive], D->Side, D->Track[D->Drive],
-                        //    D->Side, D->CylinderNumber, D->SectorNumber);
-
+                        if (D->Verbose) printf("TC8566AF: Write-SECTOR %c:%d:%d:%d Track:%d\n", D->Drive + 'A', D->Side
+                            , D->CylinderNumber, D->SectorNumber, D->CurrTrack);
                         /* Seek to the requested sector */
                         D->Ptr = SeekFDI(D->Disk[D->Drive], D->Side, D->CurrTrack,
                             D->Side, D->CylinderNumber, D->SectorNumber);
@@ -371,8 +319,6 @@ void WriteTC8566AF(register TC8566AF* D, register unsigned char A, register unsi
                     }
                     D->Phase = PHASE_DATATRANSFER;
                     D->PhaseStep = 0;
-                    break;
-                default:
                     break;
                 }
                 break;
@@ -410,25 +356,12 @@ void WriteTC8566AF(register TC8566AF* D, register unsigned char A, register unsi
                     SETUP_STATUS3
                     break;
                 case 1:
-                    //A = D->Disk[D->Drive] && (D->Disk[D->Drive]->Header[1]< D->Disk[D->Drive]->Tracks);
-                    // //if (D->Verbose) printf("TC8566AF: SEEK drive %c:%d to track %d ==> %s\n", D->Drive + 'A',
-                    ////    (D->Disk[D->Drive]->Header[1]&0x04)>>1, D->Disk[D->Drive]->Header[1], A ? "OK" : "FAILED");
-                    //if (D->Verbose) printf("TC8566AF: SEEK drive %c:%d to track %d ==> %s\n", D->Drive + 'A',
-                    //    (D->Disk[D->Drive]->Header[1] & 0x04) >> 1, V, A ? "OK" : "FAILED");
-                    //if (A)
-                    //{
-                    //    D->Track[D->Drive] = V;
-                    //}
-                    // //D->Track[D->Drive] = D->Disk[D->Drive]->Header[1];
-
-                    //D->Track[D->Drive] = V;
                     D->CurrTrack = V;
                     if (!V)D->Status[3] |= 0x10; else D->Status[3] &= ~0x10;    /* 0x10:T0(Track0) */
                     D->Status[0] |= 0x20;   /* 0x20:SE(Seek End) */
                     D->MainStatus &= ~0x10; /* 0x10:CB(FDC Busy) */
+                    //D->MainStatus &= ~0x0F;
                     D->Phase = PHASE_IDLE;
-                    break;
-                default:
                     break;
                 }
                 break;
@@ -438,15 +371,13 @@ void WriteTC8566AF(register TC8566AF* D, register unsigned char A, register unsi
                 {
                 case 0:
                     if (D->Verbose) printf("TC8566AF: RECALIBRATE drive %c:\n", D->Drive + 'A');
-                    //D->Track[D->Drive] = 0;
-                    D->CurrTrack = 0;
+                    //D->CurrTrack = 0;
                     SETUP_STATUS0
                     SETUP_STATUS3
                     D->Status[0] |= 0x20;   /* 0x20:SE(Seek End) */
                     D->MainStatus &= ~0x10; /* 0x10:CB(FDC Busy) */
                     D->Phase = PHASE_IDLE;
-                    break;
-                default:
+                    D->CurrTrack = 0;
                     break;
                 }
                 break;
@@ -475,8 +406,6 @@ void WriteTC8566AF(register TC8566AF* D, register unsigned char A, register unsi
                     break;
                 }
                 break;
-            default:
-                break;
             }
             break;
 
@@ -485,20 +414,12 @@ void WriteTC8566AF(register TC8566AF* D, register unsigned char A, register unsi
             {
             case CMD_WRITE_DATA:
                 if(D->SectorOffset<512)
-                //if ((int)(D->Ptr - D->Disk[D->Drive]->Data) < 512)
                 {
                     /* Write data */
                     D->Ptr[D->SectorOffset] = V;
                     D->SectorOffset++;
                     if (D->SectorOffset == 512)
-                    //if ((int)(D->Ptr - D->Disk[D->Drive]->Data) == 512)
                     {
-                        //if (D->Verbose) printf("TC8566AF: DONE writing data\n");
-                        //D->Ptr = SeekFDI(D->Disk[D->Drive], D->Side, D->Track[D->Drive],
-                        //    D->Side, D->CylinderNumber, D->SectorNumber);
-                        //D->Ptr = SeekFDI(D->Disk[D->Drive], D->Disk[D->Drive]->Header[0], D->Track[D->Drive],
-                        //    D->Disk[D->Drive]->Header[0], D->Disk[D->Drive]->Header[1], D->SectorNumber);
-
                         if (D->Verbose) printf("TC8566AF: DONE writing data\n");
                         D->Ptr = SeekFDI(D->Disk[D->Drive], D->Side, D->CurrTrack,
                             D->Side, D->CylinderNumber, D->SectorNumber);
@@ -515,29 +436,9 @@ void WriteTC8566AF(register TC8566AF* D, register unsigned char A, register unsi
                 switch (D->PhaseStep&0x03)
                 {
                 case 0:
-                    //D->Track[D->Drive] = V;
                     D->CurrTrack = V;
                     break;
                 case 1:
-                    //memset(D->Ptr, D->FillerByte, 512);
-                    //unsigned char* P;
-                    //P = LinearFDI(D->Disk[D->Drive], D->SectorNumber - 1 + 9 * (D->Track[D->Drive] * D->Side + V));
-                    ///* 9: Sectors Per Track.(for 2DD Floppy disk.) */
-                    //if (P) memcpy(P, D->Ptr, 512);
-                    //else D->Status[1] |= 0x02;  /* 0x02:NW(Not Writable) */
-
-                    //unsigned char* P;
-                    //P = SeekFDI(D->Disk[D->Drive], D->Side, D->Track[D->Drive],
-                    //    D->Side, D->CylinderNumber, D->SectorNumber);
-
-                    //D->Ptr = LinearFDI(D->Disk[D->Drive], D->SectorNumber - 1 + 9 * (D->Track[D->Drive] * D->Side + V));
-                    ///* 9: Sectors Per Track.(for 2DD Floppy disk.) */
-
-                    //D->Ptr = LinearFDI(D->Disk[D->Drive], D->SectorNumber - 1 + 9 * (D->Track[D->Drive] * D->Side + V));
-
-                    //D->Ptr = LinearFDI(D->Disk[D->Drive], D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors
-                    //    *(D->Track[D->Drive]* D->Disk[D->Drive]->Sides + V));
-
                     D->Ptr = LinearFDI(D->Disk[D->Drive], D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors
                         * (D->CurrTrack * D->Disk[D->Drive]->Sides + V));
                     if (D->Ptr)memset(D->Ptr, D->FillerByte, 512);
@@ -559,13 +460,8 @@ void WriteTC8566AF(register TC8566AF* D, register unsigned char A, register unsi
                 break;
             }
             D->MainStatus &= ~0x80;
-            D->Wait = 6;
-            break;
-        default:
             break;
         }
-        break;
-    default:
         break;
     }
 }

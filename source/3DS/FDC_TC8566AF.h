@@ -42,6 +42,7 @@ typedef struct
 	unsigned char Side;				/* Current side #			*/
 	unsigned char CylinderNumber;	/* Current cylinder #		*/
 	unsigned char SectorNumber;		/* Current Sector Number #	*/
+	unsigned char Number;			/* Current Sector Size #	*/
 	unsigned char OldSide;
 	unsigned char OldCylinderNumber;
 	unsigned char OldSectorNumber;
@@ -49,7 +50,6 @@ typedef struct
 	unsigned char SectorsPerCylinder;
 	unsigned char FillerByte;
 	unsigned char CurrTrack;		/* Current track #			*/
-	unsigned char Number;
 	unsigned char Wait;				/* Expiration counter		*/
 	unsigned char Cmd;				/* Last command				*/
 	unsigned char CommandCode;		/* Last Command reg value	*/
@@ -57,6 +57,7 @@ typedef struct
 	unsigned char PhaseStep;
 
 	unsigned char* Ptr;				/* Pointer to data */
+	unsigned char Buf[512];
 
 	unsigned char Verbose;
 

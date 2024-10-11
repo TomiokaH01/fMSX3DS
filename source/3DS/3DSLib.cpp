@@ -139,6 +139,7 @@ extern bool IsImposeScreenShot;
 extern float ImposeRefX;
 extern float ImposeRefY;
 extern float ImposeRefSize;
+extern int ImposeTransP;
 #endif // SUPERIMPOSE
 extern bool ShowDebugMsg3DS;
 extern bool IsSmallScrShot;
