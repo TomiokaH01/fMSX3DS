@@ -1707,6 +1707,12 @@ int ResetMSX(int NewMode, int NewRAMPages, int NewVRAMPages)
     CPU.IPeriod = CPU_H240;
     CPU.IAutoReset = 0;
 
+#ifdef DEBUG
+    CPU.Trace = 0;
+    CPU.TrapBadOps = 0;
+#endif // DEBUG
+
+
     /* Numbers of RAM/VRAM pages should be power of 2 */
     for (J = 1; J < NewRAMPages; J <<= 1);
     NewRAMPages = J;
@@ -3359,7 +3365,11 @@ void OutZ80(word Port, byte Value)
 
     case 0xA7:
         if (Verbose & 0x40) printf("I/O: Write R800 Pause [%02Xh] : [%02Xh] \n", Port, Value);
-        R800Pause = Value;
+        //R800Pause = Value;
+        //R800Pause = (Value & 0xFE) | ((R800Pause & 0x01) ? 0: 1);
+        R800Pause = Value & 0xFC;
+        if (Value & 0x02) R800Pause |= (R800Pause & 0x02) ? 0 : 2;
+        R800Pause |= (R800Pause & 0x02) ? Value & 0x01 : 0;
         return;
 
     case 0xBA: /*Lightpen Interface*/   //To be written later.
@@ -6803,10 +6813,6 @@ void UpdateTurboRTimer(int val)
     R800TimerCnt += val;
     PCMTimerCnt += val + 59;
     VDPIOTimerCnt += val;
-#ifdef UPD_FDC
-    if(TCFDC.Wait)TCFDC.CntTimer += val;
-#endif // UPD_FDC
-
 #ifdef AUDIO_SYNC
     audioCycleCnt += val;
 #endif // AUDIO_SYNC
