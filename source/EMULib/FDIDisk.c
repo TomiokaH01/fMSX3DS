@@ -390,7 +390,7 @@ int LoadFDI(FDIDisk *D,const char *FileName,int Format)
       case 0xF8:
           I = 80;
           N = 9;
-          K = 1;
+          K = J >= 737280 ? 2 : 1;      /* Support special header disk(MSX-Fun Info-Disk etc.) */
           break;
       case 0xFC:
           I = 40;
