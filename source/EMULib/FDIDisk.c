@@ -399,7 +399,7 @@ int LoadFDI(FDIDisk *D,const char *FileName,int Format)
           break;
       case 0xF9:
       case 0xFD:
-          I = 80;
+          I = J >= 746496 ? 81 : 80;    /* Support 81 track disk(Dummieland etc). */
           N = 9;
           K = 2;
           break;
