@@ -158,8 +158,8 @@ void PatchR800(Z80* R, word Value);
 void DoCPUChange(void);
 void UpdateTurboRTimer(int val);
 word LoopZ80_V9990(register Z80* R);
+void StepOverZ80(Z80* R);
 #endif // TURBO_R
-
 
 
 /** DebugZ80() ***********************************************/

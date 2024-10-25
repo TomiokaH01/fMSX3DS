@@ -22,6 +22,11 @@
 #include <3ds.h>
 #include "3DSLib.h"
 #include "3DSConfig.h"
+
+#ifdef DEBUG
+#include "Debug.c"
+#endif // DEBUG
+
 //#include "TablesR800.h"
 
 
@@ -832,3 +837,64 @@ word RunZ80(Z80 *R)
   return(R->PC.W);
 }
 #endif /* !EXECZ80 */
+
+
+/* Execute Z80 1step. For Debugger. */
+#ifdef DEBUGGER_3DS
+void StepOverZ80(Z80* R)
+{
+    register byte I;
+    register pair J;
+    I = OpZ80(R->PC.W++);
+    R->ICount -= (R->User & 0x01) ? Cycles_R800[I] : Cycles[I];
+    R->ICount -= Cycles[I];
+
+    /* R register incremented on each M1 cycle */
+    INCR(1);
+
+    switch (I)
+    {
+#include "Codes.h"
+    case PFX_CB: CodesCB(R); break;
+    case PFX_ED: CodesED(R); break;
+    case PFX_FD: CodesFD(R); break;
+    case PFX_DD: CodesDD(R); break;
+    }
+    /* If cycle counter expired... */
+    if (R->ICount <= 0)
+    {
+        /* If we have come after EI, get address from IRequest */
+        /* Otherwise, get it from the loop handler             */
+        if (R->IFF & IFF_EI)
+        {
+            R->IFF = (R->IFF & ~IFF_EI) | IFF_1; /* Done with AfterEI state */
+            UpdateTurboRTimer(R->IBackup - 1);
+
+            R->ICount += R->IBackup - 1;       /* Restore the ICount      */
+
+            /* Call periodic handler or set pending IRQ */
+            if (R->ICount > 0) J.W = R->IRequest;
+            else
+            {
+                J.W = LoopZ80(R);        /* Call periodic handler    */
+                R->ICount += R->IPeriod; /* Reset the cycle counter  */
+                UpdateTurboRTimer(R->IPeriod);
+
+                if (J.W == INT_NONE) J.W = R->IRequest;  /* Pending IRQ */
+
+            }
+        }
+        else
+        {
+            J.W = LoopZ80(R);          /* Call periodic handler    */
+            R->ICount += R->IPeriod;   /* Reset the cycle counter  */
+            UpdateTurboRTimer(R->IPeriod);
+            if (J.W == INT_NONE) J.W = R->IRequest;    /* Pending IRQ */
+        }
+
+        if (J.W == INT_QUIT) return(R->PC.W); /* Exit if INT_QUIT */
+        if (J.W != INT_NONE) IntZ80(R, J.W);   /* Int-pt if needed */
+    }
+}
+#endif // DEBUGGER_3DS
+
