@@ -97,3 +97,9 @@ void DoPatchGetPAD(int oldPort, int newPort, byte PortNum);
 const char* GetFileExtension(std::string filestr);
 char* StringToChar(std::string str);
 void Debug_BreakPoint3DS(const char* message);
+int GetSoftKeyInput(char* text);
+#ifdef DEBUGGER_3DS
+void DebuggerBottomScreen();
+bool BrowseDebuggerMenu();
+void DisplayMemory(int startmemory);
+#endif // DEBUGGER_3DS

@@ -17,6 +17,13 @@
 #include "3DSLib.h"
 #include "MenuJapanese.h"
 
+#ifdef DEBUGGER_3DS
+#define DEBUG
+#include "Debug.c"
+#undef DEBUG
+#endif // DEBUGGER_3DS
+
+
 extern "C"
 {
 	#include "unzip.h"
@@ -70,9 +77,11 @@ u8 rapidCounts[10] = { 0,0,0,0,0,0,0,0,0,0 };
 u8 rapidInterVals[10] = { 0,0,0,0,0,0,0,0,0,0 };
 
 const int textSize = 20;
+const int textSmallSize = 13;
 const int textStartPos = 20;
 const int textEndPos = 300;
 const float fontSize = 0.5f;
+const float fontSmallSize = 0.4f;
 const int OKButtonSize = 20;
 const int scrollButtonSize = 20;
 const int textColumn = 240 / textSize;
@@ -3939,6 +3948,9 @@ void DebugMenu()
 	std::vector<std::string> debugmenuItem =
 	{
 		"[Back]",
+#ifdef DEBUGGER_3DS
+		"[StepOver Z80(R800)]",
+#endif // DEBUGGER_3DS
 		"[Show VDP Register]",
 #ifdef VDP_V9990
 		"[Show V9990 VDP Rgister]",
@@ -4065,6 +4077,23 @@ void DebugMenu()
 				SDL_Delay(TextDelay);
 				break;
 			}
+#ifdef DEBUGGER_3DS
+			if (selectmenu == "[StepOver Z80(R800)]")
+			{
+				DebuggerBottomScreen();
+				return;
+
+				//gfxInitDefault();
+				//consoleInit(GFX_BOTTOM, _NULL);
+				//IsInConsole = true;
+				//char debugchr[128];
+				//DAsm(debugchr, CPU.PC.W);
+				//printf(debugchr); printf("\n");
+				//ExitConsole();
+				//break;
+			}
+#endif // DEBUGGER_3DS
+
 			else if (selectmenu == "[Show Disk Info]")
 			{
 				gfxInitDefault();
@@ -5473,6 +5502,7 @@ const char* GetFileExtension(std::string filestr)
 	return retstr.c_str();
 }
 
+
 char* StringToChar(std::string str)
 {
 	char* tempchar = new char[str.size() + 1];
@@ -5505,3 +5535,501 @@ void Debug_BreakPoint3DS(const char* message)
 	}
 	else DrawMouseScr();
 }
+
+
+int GetSoftKeyInput(char* text)
+{
+	static SwkbdState swkbd;
+	SwkbdButton button = SWKBD_BUTTON_NONE;
+	static char kbdchar[5];
+	static int val;
+	swkbdInit(&swkbd, SWKBD_TYPE_QWERTY, 1, 4);
+	swkbdSetHintText(&swkbd, text);
+	button = swkbdInputText(&swkbd, kbdchar, sizeof(kbdchar));
+	val = strtol(kbdchar, NULL, 16);
+	return val;
+}
+
+
+#ifdef DEBUGGER_3DS
+void DebuggerBottomScreen()
+{
+	bool needRedraw = true;
+	std::vector<char*> CharVec;
+	CharVec.clear();
+	char debugchr[128];
+	char addrchr[16];
+	//std::ostringstream oss;
+	int selectIndex = 0;
+	int startid = 0;
+	int sumpc = 0;
+	int breakPointAddr = -1;
+	int breakPointHL = -1;
+	std::vector<std::vector<std::unordered_set<word>>> debugVecVec;
+	for (int i = 0; i < 4; i++)
+	{
+		std::vector < std::unordered_set<word>> debugVec;
+		for (int j = 0; j < 4; j++)
+		{
+			std::unordered_set<word> debugInfoSet;
+			debugVec.push_back(debugInfoSet);
+		}
+		debugVecVec.push_back(debugVec);
+	}
+	//std::unordered_set<word> debugInfoSet;
+	while (aptMainLoop())
+	{
+		if (needRedraw == true)
+		{
+			C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+			C2D_TargetClear(BottomRenderTartget, Color_Screen);
+			C2D_SceneBegin(BottomRenderTartget);
+			for (int i = startid; i < startid + (240 / textSmallSize) - 2; i++)
+			{
+				if (i >= CharVec.size())break;
+				int idx0 = std::max(0, i - startid) + 1;
+				if (i == selectIndex)
+				{
+					C2D_DrawRectSolid(textSmallSize*8, textSmallSize * (float)idx0, 1.0f, 320 - textSmallSize * 10, textSmallSize, Color_White);
+					DrawText(CharVec[i], textStartPos + textSmallSize*8, textSmallSize * (float)idx0, 1.0f, fontSmallSize, fontSmallSize, Color_Select);
+				}
+				else
+				{
+					DrawText(CharVec[i], textStartPos + textSmallSize*8, textSmallSize * (float)idx0, 1.0f, fontSmallSize, fontSmallSize, Color_White);
+				}
+			}
+
+			//std::string regstr = "";
+			//std::ostringstream oss0;
+			//oss0 << std::hex << CPU.AF.W;
+			//regstr = "AF:" + oss0.str();
+			//DrawTextTranslate(StringToChar(regstr)
+			//	, textStartPos, textSmallSize, 1.0f, fontSmallSize, fontSmallSize, Color_White);
+
+			std::string regstrs[13] = { "AF :", "BC :", "DE :", "HL :", "AF':", "BC':", "DE':", "HL':", "SP :", "PC :", "", "PSlot:", "SSlot:" };
+			int regsvals[13] = {CPU.AF.W, CPU.BC.W, CPU.DE.W, CPU.HL.W, CPU.AF1.W, CPU.BC1.W, CPU.DE1.W, CPU.HL1.W, CPU.SP.W, CPU.PC.W, 0,
+				PSLReg&0x03,  SSLReg[(PSLReg&0x03)]&0x03};
+			for (int i = 0; i < 13; i++)
+			{
+				if (regstrs[i] == "")continue;
+				std::ostringstream oss;
+				oss.clear();
+				oss << std::hex << regsvals[i];
+				std::string regstr;
+				switch (oss.str().size())
+				{
+				case 1:
+					regstr = regstrs[i] + (std::string)"000"  + oss.str();
+					break;
+				case 2:
+					regstr = regstrs[i] + (std::string)"00" + oss.str();
+					break;
+				case 3:
+					regstr = regstrs[i] + (std::string)"0" + oss.str();;
+					break;
+				default:
+					regstr = regstrs[i] + oss.str();
+					break;
+				}
+				std::transform(regstr.begin(), regstr.end(), regstr.begin(), [](char c) {return std::toupper(c); });
+				DrawText(StringToChar(regstr)
+					, textStartPos, textSmallSize*i, 1.0f, fontSmallSize, fontSmallSize, Color_White);
+			}
+
+			DrawCancelButton("Back");
+			int textNum = 240 / textSmallSize - 2;
+			needRedraw = false;
+			C3D_FrameEnd(0);
+		}
+		SDL_Delay(10);
+		hidScanInput();
+		unsigned int debuggerAction = 0;		/* 1:StepOver  2:RunTrace */
+		u32 kDown = hidKeysDown();
+		u32 kHeld = hidKeysHeld();
+		if (kDown & KEY_START)
+		{
+			//bool isExitDebugger = BrowseDebuggerMenu();
+			//if (isExitDebugger)break;
+			//continue;
+
+			std::vector<char*> menuvec;
+			menuvec.clear();
+			menuvec.push_back("[Back]");
+			menuvec.push_back("[Step Over]");
+			menuvec.push_back("[Run Trace]");
+			menuvec.push_back("[Set BreakPoint]");
+			menuvec.push_back("[Set Break HL value]");
+			menuvec.push_back("[Set Break IO In Value]");
+			menuvec.push_back("[Display Memory]");
+			menuvec.push_back("[Exit Debugger]");
+			int menuid = BrowseInt("<Debugger Menu>", menuvec, 0, 0, false);
+			std::string selectmenu = menuvec[menuid];
+			needRedraw = true;
+			if (selectmenu == "[Exit Debugger]")break;
+			else if( selectmenu == "[Step Over]")
+			{
+				debuggerAction = 0x01;
+			}
+			else if(selectmenu == "[Run Trace]")
+			{
+				debuggerAction = 0x02;
+			}
+			else if(selectmenu == "[Set Break HL value]")
+			{
+				breakPointHL = GetSoftKeyInput("Enter Break HL value");
+			}
+			else if(selectmenu == "[Set BreakPoint]")
+			{
+				breakPointAddr = GetSoftKeyInput("Enter Break Point Address");
+			}
+			else if(selectmenu == "[Display Memory]")
+			{
+				DisplayMemory(GetSoftKeyInput("Enter RAM Address"));
+
+				//static SwkbdState swkbd;
+				//SwkbdButton button = SWKBD_BUTTON_NONE;
+				//static char kbdchar[5];
+				//static int val;
+				//swkbdInit(&swkbd, SWKBD_TYPE_QWERTY, 1, 4);
+				//swkbdSetHintText(&swkbd, "Enter RAM Address");
+				//button = swkbdInputText(&swkbd, kbdchar, sizeof(kbdchar));
+				//val = strtol(kbdchar, NULL, 16);
+				//DisplayMemory(val);
+			}
+
+			//switch (menuid)
+			//{
+			//case 0:		/* "[Back]" */
+			//	break;
+			//case 1:		/* "[Set BreakPoint]" */
+			//	break;
+			//case 2:		/* "[Display Memory]" */
+			//	break;
+			//case 3:		/* "[Exit Debugger]" */
+			//	return;
+			//default:
+			//	break;
+			//}
+			//needRedraw = true;
+		}
+
+		if (!debuggerAction)
+		{
+			if (kDown & KEY_A)debuggerAction = 0x01;
+			else if(kDown & KEY_Y)debuggerAction = 0x02;
+		}
+		if (debuggerAction)
+		{
+			CharVec.clear();
+			sumpc = 0;
+			std::unordered_set<word> currDebugSet = debugVecVec[PSLReg & 0x03][SSLReg[PSLReg & 0x03] & 0x03];
+			for (int i = CPU.PC.W-8; i < CPU.PC.W; i++)
+			{
+				if (!currDebugSet.count(i))continue;
+				std::ostringstream oss;
+				oss << std::hex << i;
+				DAsm(debugchr, i);
+				std::string tempstr = "";
+				switch (oss.str().size())
+				{
+				case 1:
+					tempstr = (std::string)"000" + oss.str() + (std::string)": " + (std::string)debugchr;
+					break;
+				case 2:
+					tempstr = (std::string)"00" + oss.str() + (std::string)": " + (std::string)debugchr;
+					break;
+				case 3:
+					tempstr = (std::string)"0" + oss.str() + (std::string)": " + (std::string)debugchr;
+					break;
+				default:
+					tempstr = oss.str() + (std::string)": " + (std::string)debugchr;
+					break;
+				}
+				std::transform(tempstr.begin(), tempstr.end(), tempstr.begin(), [](char c) {return std::toupper(c); });
+				CharVec.push_back(StringToChar(tempstr));
+			}
+			switch (CharVec.size())
+			{
+			case 0:
+				CharVec.push_back("");
+				CharVec.push_back("");
+				break;
+			case 1:
+				CharVec.insert(CharVec.begin(),"");
+				break;
+			default:
+				break;
+			}
+			selectIndex = CharVec.size();
+			startid = std::max(0, (int)CharVec.size() - 2);
+			for (int i = 0; i < 6; i++)
+			{
+				int dasmnum = DAsm(debugchr, CPU.PC.W + sumpc);
+				currDebugSet.insert(CPU.PC.W + sumpc);
+				std::ostringstream oss;
+				oss << std::hex << (CPU.PC.W + sumpc);
+				sumpc += dasmnum;
+				std::string tempstr = "";
+				switch (oss.str().size())
+				{
+				case 1:
+					tempstr = (std::string)"000" + oss.str() + (std::string)": " + (std::string)debugchr;
+					break;
+				case 2:
+					tempstr = (std::string)"00" + oss.str() + (std::string)": " + (std::string)debugchr;
+					break;
+				case 3:
+					tempstr = (std::string)"0" + oss.str() + (std::string)": " + (std::string)debugchr;
+					break;
+				default:
+					tempstr = oss.str() + (std::string)": " + (std::string)debugchr;
+					break;
+				}
+				std::transform(tempstr.begin(), tempstr.end(), tempstr.begin(), [](char c) {return std::toupper(c); });
+				CharVec.push_back(StringToChar(tempstr));
+			}
+			debugVecVec[PSLReg & 0x03][SSLReg[PSLReg & 0x03] & 0x03] = currDebugSet;
+			needRedraw = true;
+			if (debuggerAction==1)
+			{
+				StepOverZ80(&CPU);
+			}
+			else if(debuggerAction==2)
+			{
+				while (aptMainLoop())
+				{
+					StepOverZ80(&CPU);
+					if (CPU.PC.W == breakPointAddr)break;
+					if (CPU.HL.W == breakPointHL)break;
+					BrowseHomeButton();
+					if (ExitNow == 1)return;
+				}
+			}
+
+			//selectIndex = std::max(0, (int)CharVec.size() - 1);
+			//startid = std::max(0, selectIndex - 5);
+			//DAsm(debugchr, CPU.PC.W);
+			//std::ostringstream oss;
+			//oss << std::hex << CPU.PC.W;
+
+			////std::string tempstr = std::to_string(CPU.PC.W) + ": " + debugchr;
+			////std::string tempstr = oss.str() + (std::string)": " +(std::string)debugchr;
+			////if (oss.str().size() < 4)tempstr = (std::string)"0" + tempstr;
+			//std::string tempstr = "";
+			//switch (oss.str().size())
+			//{
+			//	case 1:
+			//		tempstr = (std::string)"000" + oss.str() + (std::string)": " + (std::string)debugchr;
+			//		break;
+			//	case 2:
+			//		tempstr = (std::string)"00" + oss.str() + (std::string)": " + (std::string)debugchr;
+			//		break;
+			//	case 3:
+			//		tempstr = (std::string)"0" + oss.str() + (std::string)": " + (std::string)debugchr;
+			//		break;
+			//	default:
+			//		tempstr = oss.str() + (std::string)": " + (std::string)debugchr;
+			//		break;
+			//}
+			//std::transform(tempstr.begin(), tempstr.end(), tempstr.begin(), [](char c) {return std::toupper(c); });
+			//CharVec.push_back(StringToChar(tempstr.c_str()));
+			//needRedraw = true;
+			//StepOverZ80(&CPU);
+		}
+		else if (kDown & KEY_B)
+		{
+			return;
+		}
+		else if (kHeld & KEY_UP)
+		{
+			//GetMovedMenuIndex(selectIndex, startid, -1, NULL);
+			startid = startid - 1 < 0 ? 0 : startid - 1;
+			SDL_Delay(TextDelay);
+			needRedraw = true;
+		}
+		else if (kHeld & KEY_DOWN)
+		{
+			//GetMovedMenuIndex(selectIndex, startid, 1, CharVec.size() - 1);
+			startid = startid + 1 > CharVec.size() - 1 ? CharVec.size() - 1 : startid + 1;
+			SDL_Delay(TextDelay);
+			needRedraw = true;
+		}
+		BrowseHomeButton();
+		if (ExitNow == 1)return;
+	}
+}
+
+
+void DisplayMemory(int startmemory)
+{
+	int oldstartmemory = -1;
+	bool needRedraw = true;
+	int startid = 0;
+	std::vector<char*> CharVec;
+	CharVec.clear();
+	while (aptMainLoop())
+	{
+		if (needRedraw == true)
+		{
+			C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+			C2D_TargetClear(BottomRenderTartget, Color_Screen);
+			C2D_SceneBegin(BottomRenderTartget);
+			for (int i = startid; i < startid + (240 / textSmallSize) - 2; i++)
+			{
+				if (i >= CharVec.size())break;
+				int idx0 = std::max(0, i - startid) + 1;
+				DrawText(CharVec[i], textStartPos, textSmallSize * idx0, 1.0f, fontSmallSize, fontSmallSize, Color_White);
+			}
+			//if (CharVec.size() > 0)
+			//{
+			//	DrawText(CharVec[0], textStartPos, textSmallSize, 1.0f, fontSmallSize, fontSmallSize, Color_White);
+			//}
+			//for (int i = 0; i <4; i++)
+			//{
+			//	if (i >= CharVec.size())break;
+			//	DrawText(CharVec[i], textStartPos + textSmallSize * 3.0f * (float)i, textSmallSize, 1.0f, fontSmallSize, fontSmallSize, Color_White);
+			//}
+			//for (int i = 0; i < 4; i++)
+			//{
+			//	if (i+4 >= CharVec.size())break;
+			//	DrawText(CharVec[i+4], textStartPos + textSmallSize * 3.0f * (float)i, textSmallSize * 3.0f, 1.0f, fontSmallSize, fontSmallSize, Color_White);
+			//}
+			needRedraw = false;
+			C3D_FrameEnd(0);
+		}
+		if (startmemory != oldstartmemory)
+		{
+			for (int j = 0; j < 256; j += 8)
+			{
+				std::string addstr = "";
+				std::ostringstream oss0;
+				oss0.clear();
+				oss0 << std::hex << (startmemory + j);
+				std::string tempstr = "";
+				switch (oss0.str().size())
+				{
+				case 1:
+					tempstr = (std::string)"000" + oss0.str() + (std::string)":  ";
+					break;
+				case 2:
+					tempstr = (std::string)"00" + oss0.str() + (std::string)":  ";
+					break;
+				case 3:
+					tempstr = (std::string)"0" + oss0.str() + (std::string)":  ";
+					break;
+				default:
+					tempstr = oss0.str() + (std::string)":  ";
+					break;
+				}
+				std::transform(tempstr.begin(), tempstr.end(), tempstr.begin(), [](char c) {return std::toupper(c); });
+				addstr += tempstr;
+				for (int i = 0; i < 8; i++)
+				{
+					std::ostringstream oss;
+					oss.clear();
+					oss << std::hex << (unsigned int)ReadRAM(startmemory + j + i);
+					std::string memstr;
+					switch (oss.str().size())
+					{
+					case 1:
+						memstr = (std::string)"0" + oss.str() + (std::string)" ";
+						break;
+					default:
+						memstr = oss.str() + (std::string)" ";
+						break;
+					}
+					std::transform(memstr.begin(), memstr.end(), memstr.begin(), [](char c) {return std::toupper(c); });
+					addstr += memstr;
+				}
+				addstr += "  ";
+
+				char tempchr[9];
+				for (int i = 0; i < 8; i++)
+				{
+					char chr0 = ReadRAM(startmemory + j + i);
+					tempchr[i] = chr0 < 0x10 ? ' ' : chr0;
+				}
+				tempchr[8] = '\0';
+				addstr += (std::string)tempchr;
+
+				CharVec.push_back(StringToChar(addstr));
+			}
+			oldstartmemory = startmemory;
+			needRedraw = true;
+		}
+
+		SDL_Delay(10);
+		hidScanInput();
+		u32 kDown = hidKeysDown();
+		u32 kHeld = hidKeysHeld();
+		if (kDown & KEY_B)
+		{
+			return;
+		}
+		else if (kHeld & KEY_UP)
+		{
+			startid = startid - 1 < 0 ? 0 : startid - 1;
+			SDL_Delay(TextDelay);
+			needRedraw = true;
+		}
+		else if (kHeld & KEY_DOWN)
+		{
+			startid = startid + 1 > CharVec.size() - 1 ? CharVec.size() - 1 : startid + 1;
+			SDL_Delay(TextDelay);
+			needRedraw = true;
+		}
+		BrowseHomeButton();
+		if (ExitNow == 1)return;
+	}
+}
+
+
+bool BrowseDebuggerMenu()
+{
+	std::vector<char*> menuvec;
+	menuvec.clear();
+	menuvec.push_back("[Back]");
+	menuvec.push_back("[Set BreakPoint]");
+	menuvec.push_back("[Display Memory]");
+	menuvec.push_back("[Exit Debugger]");
+	menuvec.push_back("");
+	int menuid = BrowseInt("<Debugger Menu>", menuvec, 0, 0, false);
+
+	std::string menustr = std::string(menuvec[menuid]);
+	if (menustr == "[Back]")
+	{
+		return false;
+	}
+	else if (menustr == "[Exit Debugger]")
+	{
+		return true;
+	}
+	else if(menustr == "[Display Memory]")
+	{
+		static SwkbdState swkbd;
+		SwkbdButton button = SWKBD_BUTTON_NONE;
+		static char kbdchar[5];
+		static int val;
+		swkbdInit(&swkbd, SWKBD_TYPE_QWERTY, 1, 4);
+		swkbdSetHintText(&swkbd, "Enter Memory Address");
+		button = swkbdInputText(&swkbd, kbdchar, sizeof(kbdchar));
+		val = strtol(kbdchar, NULL, 16);
+	}
+	return false;
+
+	//std::vector<std::string> debugmenuItem =
+	//{
+	//	"[Back]",
+	//	"[Set BreakPoint]",
+	//	"[Display Memory]",
+	//	"[Exit Debugger]",
+	//	""
+	//};
+	//textbuf = C2D_TextBufNew(4096);
+	//bool needRedraw = true;
+	//int menuItemCount = debugmenuItem.size();
+	//int selectIndex = 0;
+	//int startid = 0;
+	//bool IsInConsole = false;
+}
+#endif // DEBUGGER_3DS
