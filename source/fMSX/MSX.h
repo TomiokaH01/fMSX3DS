@@ -30,6 +30,7 @@
 
 #include "3DSConfig.h"
 #include "FDC_TC8566AF.h"
+#include "MegaSCSI.h"
 
 /** INLINE ***************************************************/
 /** C99 standard has "inline", but older compilers've used  **/
@@ -346,12 +347,15 @@ void ResetIOTData(void);
 #endif // _MSX0
 #ifdef HDD_NEXTOR
 void LoadPatchedNEXTOR();
-byte ChangeHDDWithFormat(byte N, const char* FileName, int Format);
+//byte ChangeHDDWithFormat(byte N, const char* FileName, int Format);
 #endif // HDD_NEXTOR
 #ifdef HDD_IDE
 void LoadNEXTOR();
 byte ChangeHDDIDEWithFormat(byte N, const char* FileName, int Format);
 #endif // HDD_IDE
+#if defined(HDD_NEXTOR) ||  defined(MEGASCSI_HD)
+byte ChangeHDDWithFormat(byte N, const char* FileName, int Format);
+#endif // HDD_NEXTOR    MEGASCSI_HD
 
 
 
@@ -479,9 +483,10 @@ extern FILE *CasStream;               /* Cassette I/O stream */
 extern unsigned char  isLoadDer;
 extern unsigned char* derBuf;
 #endif // _3DS
-#if defined(HDD_NEXTOR) || defined(HDD_IDE)
+#if defined(HDD_NEXTOR) || defined(HDD_IDE) || defined(MEGASCSI_HD)
 extern FDIDisk HDD[2];
-#endif // HDD_NEXTOR    HDD_IDE
+extern FILE* HDDStream;               /* HDD I/O stream     */
+#endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
 
 
 typedef struct

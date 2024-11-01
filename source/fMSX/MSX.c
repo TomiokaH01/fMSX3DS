@@ -489,16 +489,18 @@ byte SetScreenV9990(void);
 unsigned char overClockRatio = 0;
 #endif // USE_OVERCLOCK
 
-
 #ifdef AUDIO_SYNC
 int audioCycleCnt = 0;
 #endif // AUDIO_SYNC
 
-
-
-#if defined(HDD_NEXTOR) || defined(HDD_IDE)
+#if defined(HDD_NEXTOR) || defined(HDD_IDE) || defined(MEGASCSI_HD)
 FDIDisk HDD[2];
-#endif // HDD_NEXTOR    HDD_IDE
+FILE* HDDStream;
+#endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
+#ifdef MEGASCSI_HD
+MB89352A spc;
+byte ReadMEGASCSI(word A);
+#endif // MEGASCSI_HD
 
 #ifdef _3DS
 byte DeviceInited = 0;      /* 1:Gyroscope 2:MCUHWC*/
@@ -1707,6 +1709,12 @@ int ResetMSX(int NewMode, int NewRAMPages, int NewVRAMPages)
     CPU.IPeriod = CPU_H240;
     CPU.IAutoReset = 0;
 
+#ifdef DEBUG
+    CPU.Trace = 0;
+    CPU.TrapBadOps = 0;
+#endif // DEBUG
+
+
     /* Numbers of RAM/VRAM pages should be power of 2 */
     for (J = 1; J < NewRAMPages; J <<= 1);
     NewRAMPages = J;
@@ -2039,16 +2047,26 @@ byte RdZ80(word A)
         case 1:     /* Cartridge Slot B */
             CPU.ICount -= 2;
             //if (CartSpecial[I] == CART_READSCC)
-            if ((CartSpecial[0] == CART_READSCC) || (CartSpecial[1]==CART_READSCC))
-            {
-                if (A >= 0x9800 && A < 0xA000)
+            //if (HasSpecialCart)
+            //{
+            int cs0 = CartSpecial[0], cs1 = CartSpecial[1];
+                if ((cs0 == CART_READSCC) || (cs1 == CART_READSCC))
                 {
-                    if (SCCOn[I])return (Read2212(A));
-                    //else if (A == 0x9800) return 0xFF;
-                    //if (SCCOn[I] && (CartSpecial[I] == CART_READSCC))return (Read2212(A));
-                    //else if (A == 0x9800) return 0xFF;
+                    if (A >= 0x9800 && A < 0xA000)
+                    {
+                        if (SCCOn[I])return (Read2212(A));
+                        //else if (A == 0x9800) return 0xFF;
+                        //if (SCCOn[I] && (CartSpecial[I] == CART_READSCC))return (Read2212(A));
+                        //else if (A == 0x9800) return 0xFF;
+                    }
                 }
-            }
+#ifdef MEGASCSI_HD
+                else if ((cs0 == CART_MEGASCSI) || (cs1 == CART_MEGASCSI))
+                {
+                    return ReadMEGASCSI(A);
+                }
+#endif // MEGASCSI_HD
+            //}
             break;
         case 2:
             break;
@@ -2123,22 +2141,32 @@ byte RdZ80(word A)
     }
     else
     {
-        if (CartSpecial[0] == CART_READSCC || CartSpecial[1] == CART_READSCC)
-        {
-            if (A >= 0x9800 && A < 0xA000)
-                //if ((A & 0xE000) == 0x8000 && A >= 0x9800)
+    int cs0 = CartSpecial[0], cs1 = CartSpecial[1];
+        //if (HasSpecialCart)     /* Use global flag to speedup. */
+        //{
+            if (cs0 == CART_READSCC || cs1 == CART_READSCC)
             {
-                byte J, I, PS, SS;
-                J = A >> 14;
-                PS = PSL[J];
-                SS = SSL[J];
-                I = CartMap[PS][SS];
-                if (SCCOn[I])return (Read2212(A));
+                if (A >= 0x9800 && A < 0xA000)
+                    //if ((A & 0xE000) == 0x8000 && A >= 0x9800)
+                {
+                    byte J, I, PS, SS;
+                    J = A >> 14;
+                    PS = PSL[J];
+                    SS = SSL[J];
+                    I = CartMap[PS][SS];
+                    if (SCCOn[I])return (Read2212(A));
 
-                //if ((SCCOn[0] && CartSpecial[0] == CART_READSCC) || (SCCOn[1] && CartSpecial[1] == CART_READSCC))return (Read2212(A));
-                //else if (A == 0x9800) return 0xFF;
+                    //if ((SCCOn[0] && CartSpecial[0] == CART_READSCC) || (SCCOn[1] && CartSpecial[1] == CART_READSCC))return (Read2212(A));
+                    //else if (A == 0x9800) return 0xFF;
+                }
             }
-        }
+#ifdef MEGASCSI_HD
+            else if ((cs0 == CART_MEGASCSI) || (cs1 == CART_MEGASCSI))
+            {
+                return ReadMEGASCSI(A);
+            }
+#endif // MEGASCSI_HD
+        //}
     }
 #endif // TURBO_R
 
@@ -4634,6 +4662,9 @@ void MapROM(register word A, register byte V)
             return;
         }
         break;
+
+    /* ESE-RAM and Mega-SCSI */
+    /* http://www.hat.hi-ho.ne.jp/tujikawa/ese/megascsi.html */
     case MAP_MEGASCSI:
         if ((A >= 0x6000) && (A < 0x8000))
         {
@@ -4643,7 +4674,7 @@ void MapROM(register word A, register byte V)
                 RAM[J + 2] = MemMap[PS][SS][J + 2] = ExternalRAMData[I] + ((int)(V&0x3F) << 13);
                 ROMMapper[I][J] = V;
                 if (Verbose & 0x08)
-                    printf("ROM-MAPPER SRAM val:%02Xh at:%04Xh \n", V, A);
+                    printf("ROM-MAPPER Mega-SCSI val:%02Xh at:%04Xh \n", V, A);
                 //if ((J != 1) && (V >= 0x80))ROMMapper[I][J] = 0xFF;
             }
             return;
@@ -4655,6 +4686,24 @@ void MapROM(register word A, register byte V)
             SaveSRAM[I] = 1;
             return;
         }
+#ifdef MEGASCSI_HD
+        else if((ROMMapper[I][((A - 0x4000) >> 13)] == 0x7F) && ((A>=0x4000) && (A<0x6000)))       /* SCSI */
+        {
+            if ((A & 0x1FFF) < 0x1000)      /* 0x4000-0x4FFF:Data Register */
+            {
+                MB89352A_WriteDREG(&spc, V);
+                if (Verbose & 0x08)
+                    printf("Mega-SCSI Write Data Register %4Xh : %2Xh \n", A, V);
+            }
+            else        /* 0x5000-0x5FFF:spc register */
+            {
+                MB89352A_WriteReg(&spc, A & 0x0F, V);
+                if (Verbose & 0x08)
+                    printf("Mega-SCSI Write spc Register[%d] : %2Xh \n", A&0x0F, V);
+            }
+            return;
+        }
+#endif // MEGASCSI_HD
         break;
 #endif //   TURBO_R
     }
@@ -6377,6 +6426,8 @@ void LoadESERAM(int Slot, int RamSize)
     ROMMask[Slot] = 0x3F;
 
     SetROMType(Slot, MAP_MEGASCSI);
+
+    CartSpecial[Slot] = CART_MEGASCSI;
 }
 
 
@@ -7618,7 +7669,47 @@ byte SetScreenV9990(void)
 }
 #endif // VDP_V9990
 
-#ifdef HDD_NEXTOR
+
+#ifdef MEGASCSI_HD
+byte ReadMEGASCSI(word A)
+{
+    byte J, I, PS, SS;
+    J = A >> 14;
+    PS = PSL[J];
+    SS = SSL[J];
+    I = CartMap[PS][SS];
+    //J = A >> 13;
+    J = (A - 0x4000) >> 13;
+    if ((!J) && (ROMMapper[I][0] == 0x7F))
+    {
+        if ((A & 0x1FFF) < 0x1000)      /* 0x4000-0x4FFF: Data Regsiter */
+        {
+            if (Verbose & 0x08)
+                printf("Mega-SCSI Read Data Register %4Xh  PC:%4Xh\n", A, CPU.PC.W);
+            return MB89352A_ReadDREG(&spc);
+        }
+        /* 0x5000-0x5FFF: spc register */
+        A &= 0x0F;
+        if (Verbose & 0x08)
+            printf("Mega-SCSI read spc Register:%d  PC:%4Xh \n", A, CPU.PC.W);
+        return MB89352A_ReadReg(&spc, A);
+    }
+    //else if(ROMMapper[I][J]>=0x80)
+    else
+    {
+        //if (Verbose & 0x08)
+        //    printf("Mega-SCSI Read SRAM %4Xh\n", A);
+        //return NORAM;
+        return(RAM[A >> 13][A & 0x1FFF]);
+    }
+    //else
+    //{
+    //   return NORAM;
+    //}
+}
+#endif // MEGASCSI_HD
+
+#if defined(HDD_NEXTOR) || defined(MEGASCSI_HD)
 byte ChangeHDDWithFormat(byte N, const char* FileName, int Format)
 {
     int NeedState, J, C2, Size;
@@ -7648,14 +7739,23 @@ byte ChangeHDDWithFormat(byte N, const char* FileName, int Format)
     /* Rewind file to the beginning */
     rewind(F);
 
+    HDDStream = F;
+
     if (!(P = LoadROM(FileName, Size, 0)))return(0);
     HDD[N].Data = P;
     HDD[N].DataSize = Size;
     HDD[N].Format = Format;
     if (Verbose)printf("Load HardDisk Image Size %d", Size);
+
+#ifdef MEGASCSI_HD
+    MB89352A_Init(&spc);
+    MB89352A_Reset(&spc);
+#endif // MEGASCSI_HD
+
     return(1);
 }
-#endif // HDD_NEXTOR
+#endif // HDD_NEXTOR     MEGASCSI_HD
+
 #ifdef HDD_IDE
 byte ChangeHDDIDEWithFormat(byte N, const char* FileName, int Format)
 {
@@ -8173,6 +8273,7 @@ int LoadCart(const char* FileName, int Slot, int Type)
         {
 #ifdef _3DS
             CartSpecial[Slot] = 0;
+            HasSpecialCart = 0;
             AllowSCC[Slot] = 1;
 #endif // _3DS
 
