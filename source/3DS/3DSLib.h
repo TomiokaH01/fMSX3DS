@@ -44,6 +44,7 @@ extern unsigned char IsSndRegUpd;
 extern int MouseDX3DS[2];
 extern int MouseDY3DS[2];
 extern int CartSpecial[2];
+extern int HasSpecialCart;
 extern int ScreenShotOffx;
 extern int ScreenShotOffy;
 extern unsigned char IsStartLoadFile;
@@ -113,7 +114,9 @@ extern int audioCycleCnt;
 #define	CART_READSCC	9	/* Read from SCC register. Wing Warrior(2021 ver.) etc. */
 #define CART_SOFT_RESET 10	/* Need software reset on MSX2+. Zombie Hunter etc. */
 #define CART_NEED_CBIOS	11	/* Need C-BIOS to wrok on MSX2+. */
-#define CART_SLOTBUG	12	/* Does'nt work on MSX with Slot Expanded. */	
+#define CART_SLOTBUG	12	/* Does'nt work on MSX with Slot Expanded. */
+#define CART_MEGASCSI	13	/* MEGA-SCSI cartridge for Hard Disk etc. */
+
 	
 #define CBIOS_BR	0	/* C-BIOS Brazil */
 #define	CBIOS_EU	1	/* C-BIOS European */

@@ -116,6 +116,7 @@ unsigned char Use8950TurboR = 0;
 unsigned char ReadSCCPlus = 0;
 char IsDebug = 0;
 int CartSpecial[2] = { 0,0 };
+int HasSpecialCart = 0;
 unsigned char IsStartLoadFile = 1;
 int IPSPatchSize = 0;
 unsigned char* IPSPatchBuf;
@@ -378,9 +379,9 @@ static std::vector<std::string> menuItem =
 	"[Load der file]",
 	"[Apply IPS Patch]",
 	"[Eject Disk]",
-#ifdef HDD_NEXTOR
+#if defined(HDD_NEXTOR) || defined(HDD_IDE) || defined(MEGASCSI_HD)
 	"[Load HardDisk]",
-#endif // HDD_NEXTOR
+#endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
 	"",
 	"<Cassette Tape Files>",
 	"[Load Cassette Tape]",
@@ -574,11 +575,11 @@ void Init3DS()
 	//debugFile = fopen("/FMSX3DS/DebugLog.txt", "w");
 	//debugFile = open_memstream(&debugBuf, &debugBufSize);
 	debugFile = fmemopen(debugBuf, 0x10000, "r+");
-	//Verbose = 0x2C;	/*  0x02:VDP Command,  0x04:Disk IO,  0x8:MAP ROM,  0x20:IO Port,  0x40:MSXTurboR , 0x80:V9990 */
+	//Verbose = 0x2C;	/*  0x02:VDP Command,  0x04:Disk IO,  0x8:MAP ROM, 0x10: SCSI, 0x20:IO Port,  0x40:MSXTurboR , 0x80:V9990 */
 	//Verbose = 0x20;
 	//Verbose = 0xA0;
-	//Verbose = 0x04;
-	Verbose = 0x44;
+	Verbose = 0x18;
+	//Verbose = 0x44;
 	//Verbose = 9;
 #endif // DEBUG_LOG
 }
@@ -643,11 +644,11 @@ void BrowseROM(int slotid, int browsetype)
 		case BROWSE_DER:
 			msgstr = "[Select a der copyprotect file]";
 			break;
-#ifdef HDD_NEXTOR
+#if defined(HDD_NEXTOR) || defined(HDD_IDE) || defined(MEGASCSI_HD)
 		case BROWSE_HDD:
 			msgstr = "[Select a HDD image]";
 			break;
-#endif // HDD_NEXTOR
+#endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
 
 		case BROWSE_START | BROWSE_ALL:
 		case BROWSE_ALL:
@@ -827,17 +828,19 @@ void BrowseROM(int slotid, int browsetype)
 				}
 				else if(strcasecmp(extname, ".DSK")==0)
 				{
-#ifdef HDD_NEXTOR
+#if defined(HDD_NEXTOR) || defined(HDD_IDE) || defined(MEGASCSI_HD)
 					if (browsetype == BROWSE_HDD)
 					{
 						if (ChangeHDDWithFormat(0, cfstring.c_str(), FMT_MSXDSK))
 						{
+#ifdef HDD_NEXTOR
 							LoadPatchedNEXTOR();
+#endif // HDD_NEXTOR
 							return;
 						}
+						return;
 					}
-#endif // HDD_NEXTOR
-
+#endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
 					AutoSaveDisk(slotid);
 					std::string currstr = getZipSaveDiskPath(cfstring, extname);
 					std::string savestr;
@@ -2971,9 +2974,9 @@ int OpenDirectoryDir(std::string dirstr, int browsetype)
 					((strcasecmp(extname, ".ROM") == 0 || strcasecmp(extname, ".MX1") == 0 || strcasecmp(extname, ".MX2") == 0) && (browsetype & BROWSE_ROM)) ||
 					(strcasecmp(extname, ".DSK") == 0 && (browsetype & BROWSE_DISK)) ||
 					(strcasecmp(extname, ".DER") == 0 && (browsetype & BROWSE_DER)) ||
-#if defined(HDD_NEXTOR) || defined(HDD_IDE)
+#if defined(HDD_NEXTOR) || defined(HDD_IDE) || defined(MEGASCSI_HD)
 					(strcasecmp(extname, ".DSK") == 0 && (browsetype & BROWSE_HDD)) ||
-#endif // HDD_NEXTOR	HDD_IDE
+#endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
 					(strcasecmp(extname, ".CAS") == 0 && (browsetype & BROWSE_TAPE)) ||
 					(strcasecmp(extname, ".IPS") == 0 && (browsetype & BROWSE_PATCH)) ||
 					((strcasecmp(extname, ".MCF") == 0 || strcasecmp(extname, ".CHT") == 0) && (browsetype & BROWSE_CHEAT)) ||
@@ -3403,14 +3406,14 @@ void systemMenu()
 				BrowseROM(0, BROWSE_DER);
 				return;
 			}
-#ifdef HDD_NEXTOR
+#if defined(HDD_NEXTOR) || defined(HDD_IDE) || defined(MEGASCSI_HD)
 			else if (selectmenu == "[Load HardDisk]")
 			{
 				BrowseROM(0, BROWSE_HDD);
 				return;
 				//LoadPatchedNEXTOR();
 			}
-#endif // HDD_NEXTOR
+#endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
 			else if (selectmenu == "[Load Cassette Tape]")
 			{
 				BrowseROM(0, BROWSE_TAPE);
@@ -5320,6 +5323,7 @@ void LoadOption(bool IsInit)
 		{
 			if (ReadSCCPlus)CartSpecial[0] = CART_READSCC;
 			else if (CartSpecial[0] == CART_READSCC)CartSpecial[0] = 0;
+			HasSpecialCart = (!CartSpecial[0]) && (!CartSpecial[1]) ? 0 : 1;
 			messageType = messageType > 1 ? messageType : 1;
 		}
 	}

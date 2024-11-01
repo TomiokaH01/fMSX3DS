@@ -3125,12 +3125,17 @@ void CheckSpecialCart(void* Buf, int Size, int Type, int Slot)
 		case MAP_WingWarr:
 			CartSpecial[Slot] = CART_READSCC;
 			break;
+		case MAP_MEGASCSI:
+			CartSpecial[Slot] = CART_MEGASCSI;
+			break;
 		default:
 			CartSpecial[Slot] = 0;
 			break;
 		}
 		break;
 	}
+
+	HasSpecialCart = ((!CartSpecial[0]) && (!CartSpecial[1])) ? 0 : 1;
 
 	if (CartSpecial[Slot] == CART_NEED_CBIOS)ReloadBIOS = 1;
 	if (OldCartSpecial == CART_NEED_CBIOS && CartSpecial[Slot] != CART_NEED_CBIOS)ReloadBIOS = 1;
