@@ -407,6 +407,7 @@ static std::vector<std::string> menuItem =
 	"<Unsafe Actions>",
 	"[Fast Forward]",
 	"[OverClockR800(Unsafe)]",
+	"[Use 4MB Memory(Unsafe)]",
 	"[Cheat]",
 #ifdef DEBUG_ENABLE
 		"[Debug]",
@@ -575,12 +576,12 @@ void Init3DS()
 	//debugFile = fopen("/FMSX3DS/DebugLog.txt", "w");
 	//debugFile = open_memstream(&debugBuf, &debugBufSize);
 	debugFile = fmemopen(debugBuf, 0x10000, "r+");
-	//Verbose = 0x2C;	/*  0x02:VDP Command,  0x04:Disk IO,  0x8:MAP ROM, 0x10: SCSI, 0x20:IO Port,  0x40:MSXTurboR , 0x80:V9990 */
+	//Verbose = 0x2C;	/*  0x02:VDP Command,  0x04:Disk IO,  0x8:MAP ROM, 0x20:IO Port,  0x40:MSXTurboR , 0x80:V9990 */
 	//Verbose = 0x20;
 	//Verbose = 0xA0;
-	Verbose = 0x18;
-	//Verbose = 0x44;
+	Verbose = 0x44;
 	//Verbose = 9;
+	//Verbose = 4;
 #endif // DEBUG_LOG
 }
 
@@ -3702,6 +3703,10 @@ void systemMenu()
 				overClockRatio = BrowseInt("OverClock Rate", OptionOverClock, overClockRatio, 0, false);
 			}
 #endif // USE_OVERCLOCK
+			else if (selectmenu == "[Use 4MB Memory(Unsafe)]")
+			{
+			if (BrowseOK("Chnage memory size to 4MB(Unsafe)?", NULL))NewRAMSize = 6;
+			}
 			else if (selectmenu == "[Fast Forward]")
 			{
 			if (BrowseOK("Do you want to enter fast forward mode?", NULL))
@@ -5842,7 +5847,7 @@ void DebuggerBottomScreen()
 		}
 		else if (kDown & KEY_B)
 		{
-			return;
+			break;
 		}
 		else if (kHeld & KEY_UP)
 		{
