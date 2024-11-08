@@ -138,6 +138,10 @@ unsigned char Stereo3DMode = 0;
 unsigned char OldIs3DNow = 0;
 unsigned char Is3DNow = 0;
 #endif // USE_3D
+#ifdef HDD_NEXTOR
+const char* nextorPath = "Nextor-2.1.2.StandaloneASCII16.ROM";
+#endif // HDD_NEXTOR
+
 
 #ifdef DEBUG_LOG
 #define MAXDEBUG	1024
@@ -578,8 +582,8 @@ void Init3DS()
 	debugFile = fmemopen(debugBuf, 0x10000, "r+");
 	//Verbose = 0x2C;	/*  0x02:VDP Command,  0x04:Disk IO,  0x8:MAP ROM, 0x20:IO Port,  0x40:MSXTurboR , 0x80:V9990 */
 	//Verbose = 0x20;
-	//Verbose = 0xA0;
-	Verbose = 0x44;
+	Verbose = 0xA0;
+	//Verbose = 0x44;
 	//Verbose = 9;
 	//Verbose = 4;
 #endif // DEBUG_LOG
@@ -835,7 +839,7 @@ void BrowseROM(int slotid, int browsetype)
 						if (ChangeHDDWithFormat(0, cfstring.c_str(), FMT_MSXDSK))
 						{
 #ifdef HDD_NEXTOR
-							LoadPatchedNEXTOR();
+							LoadPatchedNEXTOR("Nextor-2.1.2.StandaloneASCII16.ROM");
 #endif // HDD_NEXTOR
 							return;
 						}
