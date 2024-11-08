@@ -346,7 +346,7 @@ void ChangeFMSound(int FMType);
 void ResetIOTData(void);
 #endif // _MSX0
 #ifdef HDD_NEXTOR
-void LoadPatchedNEXTOR();
+unsigned char LoadPatchedNEXTOR(const char* nextorPath);
 //byte ChangeHDDWithFormat(byte N, const char* FileName, int Format);
 #endif // HDD_NEXTOR
 #ifdef HDD_IDE
@@ -486,6 +486,7 @@ extern unsigned char* derBuf;
 #if defined(HDD_NEXTOR) || defined(HDD_IDE) || defined(MEGASCSI_HD)
 extern FDIDisk HDD[2];
 extern FILE* HDDStream;               /* HDD I/O stream     */
+extern int HDDSize;
 #endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
 
 

@@ -34,10 +34,6 @@ word OldAddr = 0x0000;
 word OldStart = 0x0000;
 byte DummyWrite = 0;
 
-#ifdef HDD_NEXTOR
-int HDDSize = 0x1000000;
-#endif // HDD_NEXTOR
-
 
 /** DiskPresent() ********************************************/
 /** Return 1 if disk drive with a given ID is present.      **/
@@ -171,28 +167,44 @@ byte* LinearHDD(byte ID, int SectorN, byte PerTrack, byte Heads)
         int Track = SectorN / PerTrack >> (Heads - 1);
         int Side = (SectorN / PerTrack) & (Heads - 1);
 
-        if (Verbose & 0x04)printf("Seek Disk Side:%d Track:%d SideID:%d TrackID:%d SectorID:%d SectorNum:%d\n",
-            Side, Track, Side, Track, Sector + 1, SectorN);
-        return(SeekFDI(&HDD[0], Side, Track, Side, Track, Sector + 1));
+        if (Verbose & 0x04)printf("Seek HDD %d\n",SectorN);
+
+        //return(SeekFDI(&HDD[0], Side, Track, Side, Track, Sector + 1));
+        return(HDD[0].Data + (SectorN*512));
+        //fseek(HDDStream, SectorN*512, SEEK_SET);
+        //return HDDStream;
+
+        //byte* Buf;
+        //fseek(HDDStream, SectorN * 512, SEEK_SET);
+        //fread(Buf, 512, 1, HDDStream);
+        //return Buf;
     }
 }
 
 
 byte HDDRead(byte ID, byte* Buf, int N, byte PerTrack, byte Heads)
 {
-    byte* P;
-    P = LinearHDD(ID, N, PerTrack, Heads);
-    if (P) memcpy(P, Buf, 512);
-    return(!!P);
+    //byte* P;
+    //P = LinearHDD(ID, N, PerTrack, Heads);
+    //if (P) memcpy(Buf, P, 512);
+    //return(!!P);
+
+    fseek(HDDStream, N * 512, SEEK_SET);
+    if (fread(Buf, 512, 1, HDDStream))return 1;
+    else return 0;
 }
 
 
 byte HDDWrite(byte ID, byte* Buf, int N, byte PerTrack, byte Heads)
 {
-    byte* P;
-    P = LinearHDD(ID, N, PerTrack, Heads);
-    if (P) memcpy(P, Buf, 512);
-    return(!!P);
+    //byte* P;
+    //P = LinearHDD(ID, N, PerTrack, Heads);
+    //if (P) memcpy(P, Buf, 512);
+    //return(!!P);
+
+    fseek(HDDStream, N * 512, SEEK_SET);
+    if (fwrite(Buf, N * 512, 1, HDDStream))return 1;
+    else return 0;
 }
 
 #endif // HDD_NEXTOR
@@ -781,6 +793,7 @@ case 0xDB:  /* Touchpad and Light pen */
   /* https://github.com/Konamiman/Nextor/blob/v2.1/docs/Nextor%202.1%20Driver%20Development%20Guide.md */
 case 0x4133:
     /* DRV_VERSION*/
+    if (Verbose & 0x04)printf("DRV VERSION\n");
     R->AF.B.h = 5;
     R->BC.B.h = 0;
     R->BC.B.l = 0;
@@ -788,9 +801,22 @@ case 0x4133:
 
 case 0x4136:
     /* DRV_INIT */
+    if (Verbose & 0x04)printf("DRV INIT\n");
     R->AF.B.l = 0;
     R->AF.B.h = 0;
     R->HL.W = 0;
+    return;
+
+case 0x4139:
+    /* DRV_BASSTAT */
+    if (Verbose & 0x04)printf("DRV BASSTAT\n");
+    R->AF.B.l |= C_FLAG;
+    return;
+
+case 0x413C:
+    /* DRV_BASDEV */
+    if (Verbose & 0x04)printf("DRV BASEDEV\n");
+    R->AF.B.l |= C_FLAG;
     return;
 
 case 0x4160:
@@ -822,17 +848,18 @@ case 0x4160:
     }
     /* .NRDY error */
     //if(!HDD[R->AF.B.h].Data){R->AF.B.h = 0xFC;return;}
-    if (!HDD[0].Data) { R->AF.B.h = 0xFC; return; }
+    //if (!HDD[0].Data) { R->AF.B.h = 0xFC; return; }
+    if (!HDDStream) { R->AF.B.h = 0xFC; return; }
 
     /* Save slot states */
-    PS = PSLReg;
-    SS = SSLReg[3];
+    //PS = PSLReg;
+    //SS = SSLReg[3];
 
-    SSO = 0x55 * ((SS >> 6) & 0x03);
-    PSO = (PS & 0xF3) | ((RdZ80(0xF342) & 0xFF) << 2);
+    //SSO = 0x55 * ((SS >> 6) & 0x03);
+    //PSO = (PS & 0xF3) | ((RdZ80(0xF342) & 0xFF) << 2);
 
-    PSlot(PSO);
-    SSlot(SSO);
+    //PSlot(PSO);
+    //SSlot(SSO);
 
     if (R->AF.B.l & C_FLAG)
     {
@@ -846,8 +873,8 @@ case 0x4160:
             {
                 R->AF.B.h = 0xFC;
                 R->BC.B.h = 0;
-                SSlot(SS);
-                PSlot(PS);
+                //SSlot(SS);
+                //PSlot(PS);
                 return;
             }
         }
@@ -862,16 +889,16 @@ case 0x4160:
             {
                 R->AF.B.h = 0xFC;
                 R->BC.B.h = 0;
-                SSlot(SS);
-                PSlot(PS);
+                //SSlot(SS);
+                //PSlot(PS);
                 return;
             }
             for (J = 0; J < 512; J++) WrZ80(Addr++, Buf[J]);
         }
     }
     /* Restore slot states */
-    SSlot(SS);
-    PSlot(PS);
+    //SSlot(SS);
+    //PSlot(PS);
 
     /* Return "Success" */
     R->AF.B.h = 0;
@@ -884,7 +911,7 @@ case 0x4166:
         R->AF.B.h = 0;
         return;
     }
-    R->AF.B.h = 2;
+    R->AF.B.h = 1;
     return;
 
 case 0x4169:
@@ -905,14 +932,14 @@ case 0x4169:
     WrZ80(Addr + 5, (J>>16)&0xFF);
     WrZ80(Addr + 6, (J>>24)&0xFF);
     WrZ80(Addr + 7, 1);
-    //WrZ80(Addr + 8, 0);
-    //WrZ80(Addr + 9, 0);
-    WrZ80(Addr + 8, (J/512)&0xFF);
-    WrZ80(Addr + 9, ((J/512)>>8)&0xFF);
-    //WrZ80(Addr + 10, 0);
-    //WrZ80(Addr + 11, 0);
-    WrZ80(Addr + 10, 16);
-    WrZ80(Addr + 11, 32);
+    WrZ80(Addr + 8, 0);
+    WrZ80(Addr + 9, 0);
+    //WrZ80(Addr + 8, (J/512)&0xFF);
+    //WrZ80(Addr + 9, ((J/512)>>8)&0xFF);
+    WrZ80(Addr + 10, 0);
+    WrZ80(Addr + 11, 0);
+    //WrZ80(Addr + 10, 16);
+    //WrZ80(Addr + 11, 32);
 
     ///* Return success      */
     R->AF.B.h = 0;

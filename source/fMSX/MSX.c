@@ -496,6 +496,7 @@ int audioCycleCnt = 0;
 #if defined(HDD_NEXTOR) || defined(HDD_IDE) || defined(MEGASCSI_HD)
 FDIDisk HDD[2];
 FILE* HDDStream;
+int HDDSize;
 #endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
 #ifdef MEGASCSI_HD
 MB89352A spc;
@@ -1067,6 +1068,12 @@ void TrashMSX(void)
 #ifdef UPD_FDC
     if (MODEL(MSX_MSXTR)) ResetTC8566AF(&TCFDC, FDD, TC8566AF_EJECT);
 #endif // UPD_FDC
+
+#ifdef HDD_NEXTOR
+    /* Eject Hard Disk */
+    if (HDDStream) { fclose(HDDStream); HDDStream = 0; };
+#endif // HDD_NEXTOR
+
 
     /* Close printer output */
     ChangePrinter(0);
@@ -2869,7 +2876,8 @@ void OutZ80(word Port, byte Value)
         return;
     case 0x66:  /* INTERRUPT FLAG */
         //if (Verbose & 0x20) printf("I/O: Write V9990 Interrupt Flag[%02Xh]\n", Value);
-        if (!V9990Active)return;
+        //if (!V9990Active)return;
+        if (!V9990Active)InitV9990();   /* Support SymbOS. http://www.symbos.de/ */
         if (Value & 0x07)
         {
             V9990Port[6] &= ~Value;
@@ -6191,16 +6199,17 @@ void LoadMSXMusicTurboR()
 
 
 #ifdef HDD_NEXTOR
-void LoadPatchedNEXTOR()
+unsigned char LoadPatchedNEXTOR(const char* nextorPath)
 {
     byte J, * P;
     //NeedRest = 0;
-    if (LoadCart("Nextor-2.1.2.StandaloneASCII16.ROM", 7, MAP_ASCII16))
-    //    if (LoadCart("Nextor-2.0.4.StandaloneASCII16.rom", 7, MAP_ASCII16))
+    if (LoadCart(nextorPath, 7, MAP_ASCII16))
     {
         ROMData[7][0x1C10E] = 0x01;
-        const word NEXTORPatches[] = { 0x4130, 0x4133, 0x4136, 0x4139, 0x413C, 0x413F, 0x4142, 0x4145, 0x4148, 0x414B, 0x414E, 0x4151,
-        0x4160, 0x4163, 0x4166, 0x4169 };
+        //const word NEXTORPatches[] = { 0x4130, 0x4133, 0x4136, 0x4139, 0x413C, 0x413F, 0x4142, 0x4145, 0x4148, 0x414B, 0x414E, 0x4151,
+        //0x4160, 0x4163, 0x4166, 0x4169 };
+        const word NEXTORPatches[] = { 0x4130, 0x4133, 0x4136, 0x4139, 0x413C, 0x413F, 0x4142, 0x4145, 0x4148, 0x414B, 0x414E, 0x4160,
+            0x4163, 0x4166, 0x4169 };
         for (J = 0; NEXTORPatches[J]; ++J)
         {
             P = ROMData[7] + (0x18000 + NEXTORPatches[J]);
@@ -6209,7 +6218,9 @@ void LoadPatchedNEXTOR()
         P = ROMData[7] + 0x1C110;
         const char DriveName[] = "fMSX Nextor Device Driver";
         memcpy(P, DriveName, sizeof(DriveName));
+        return 1;       /* Load NEXTOR driver scucess. */
     }
+    return 0;       /* Load NEXTOR driver failed. */
     //NeedRest = 1;
 }
 #endif // HDD_NEXTOR
@@ -7727,24 +7738,26 @@ byte ChangeHDDWithFormat(byte N, const char* FileName, int Format)
 
     EjectFDI(&HDD[N]);
 
-    if (!fseek(F, 0, SEEK_END)) Size = ftell(F);
+    if (!fseek(F, 0, SEEK_END)) HDDSize = ftell(F);
     else
     {
+        HDDSize = 0;
         /* Read file in 16kB increments */
-        while ((J = fread(EmptyRAM, 1, 0x4000, F)) == 0x4000) Size += J;
-        if (J > 0) Size += J;
+        while ((J = fread(EmptyRAM, 1, 0x4000, F)) == 0x4000) HDDSize += J;
+        if (J > 0) HDDSize += J;
         /* Clean up the EmptyRAM! */
         memset(EmptyRAM, NORAM, 0x4000);
     }
     /* Rewind file to the beginning */
     rewind(F);
 
+    fclose(HDDStream);
     HDDStream = F;
 
-    if (!(P = LoadROM(FileName, Size, 0)))return(0);
-    HDD[N].Data = P;
-    HDD[N].DataSize = Size;
-    HDD[N].Format = Format;
+    //if (!(P = LoadROM(FileName, Size, 0)))return(0);
+    //HDD[N].Data = P;
+    //HDD[N].DataSize = Size;
+    //HDD[N].Format = Format;
     if (Verbose)printf("Load HardDisk Image Size %d", Size);
 
 #ifdef MEGASCSI_HD
