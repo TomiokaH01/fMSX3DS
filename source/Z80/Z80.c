@@ -892,7 +892,7 @@ void StepOverZ80(Z80* R)
             if (J.W == INT_NONE) J.W = R->IRequest;    /* Pending IRQ */
         }
 
-        if (J.W == INT_QUIT) return(R->PC.W); /* Exit if INT_QUIT */
+        if (J.W == INT_QUIT) return; /* Exit if INT_QUIT */
         if (J.W != INT_NONE) IntZ80(R, J.W);   /* Int-pt if needed */
     }
 }
