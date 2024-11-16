@@ -170,6 +170,8 @@ void updatePCM();
 unsigned short InMSX0IOT(void);
 unsigned char ReadIOTGET(int val);
 void OutMSX0IOT(unsigned char val);
+void ResetIOTData(void);
+void TrashMSX0(void);
 #endif // _MSX0
 
 
@@ -243,6 +245,10 @@ void InitXbuf();
 void InitScreenShotTexture(SDL_Surface* ssurface);
 void ChangeScreenImposeTransparent(int alpha);
 #endif // SUPERIMPOSE
+#ifdef MSX0_OLED
+void DrawOLED_Display(int pos, unsigned char val);
+#endif // MSX0_OLED
+
 void ShowMessage3DS(char* msg, char* msg2);
 void DoReloadFMPAC();
 int Debug_CalcBPalVlue(int R, int G, int B);

@@ -188,7 +188,11 @@ std::vector<char*> OptionUperiod = { "3","2","1","0 (No Skip)" };
 std::vector<char*> OptionScreenRes = { "No Scale", "Wide", "Full Screen", "Keep Aspect", "ExtremelyLarge"};
 std::vector<char*> OptionVsyncQuality = {"Highest(No Skip)","Higher","High","Normal","Low"};
 std::vector<char*> OptionRapidFire = {"OFF", "30/sec", "15/sec", "10/sec", "8/sec", "6/sec", "5/sec", "4/sec", "3/sec","2/sec","1/sec"};
-std::vector<char*> OptionMSX0 = {"None", "Encoder(3Dslider)"};
+#ifdef MSX0_OLED
+std::vector<char*> OptionMSX0 = {"None", "Encoder(3Dslider)", "LCD"};
+#else
+std::vector<char*> OptionMSX0 = { "None", "Encoder(3Dslider)" };
+#endif // MSX_OLED
 std::vector<char*> OptionMSX0Out = { "None","LED(3DS PowerLED)" };
 
 static std::vector<char*> FileCharVec =
@@ -4930,6 +4934,36 @@ void AdjustReferenceImageImpose(void)
 	}
 }
 #endif // SUPERIMPOSE
+
+
+#ifdef MSX0_OLED
+void DrawOLED_Display(int pos, unsigned char val)
+{
+	if(fbbottom == NULL)fbbottom = gfxGetFramebuffer(GFX_BOTTOM, GFX_LEFT, NULL, NULL);
+
+	int px = pos % 128;
+	int py = (pos / 128) * 8;
+	for (int i = 0; i < 8; i++)
+	{
+		int v0 = ((240 - 1) - (py + i)) * 3 + (px * 240 * 3);
+		if (v0 < 0)return;
+		if (v0 >= 320 * 240)return;
+		if ((val >> i) & 0x01)
+		{
+			fbbottom[v0] = 100;
+			fbbottom[v0 + 1] = 100;
+			fbbottom[v0 + 2] = 100;
+		}
+		else
+		{
+			fbbottom[v0] = 0;
+			fbbottom[v0 + 1] = 0;
+			fbbottom[v0 + 2] = 0;
+		}
+	}
+}
+#endif // MSX0_OLED
+
 
 
 void AddRecentlyList(std::string str, const char* ftype)
