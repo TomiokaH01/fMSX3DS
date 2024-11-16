@@ -16,6 +16,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "3DSLib.h"
+
 #if defined(UNIX) || defined(MAEMO) || defined(STMP3700) || defined(NXC2600) || defined(ANDROID)
 #include <unistd.h>
 #endif
