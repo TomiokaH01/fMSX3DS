@@ -189,24 +189,6 @@ void InitV9990(void);
 #endif // VDP_V9990
 
 
-#ifdef _MSX0
-#define IOT_NODE_NONE        0
-#define IOT_NODE_ACCELX      1   /* accelerometer X axis    */
-#define IOT_NODE_ACCELY      2   /* accelerometer Y axis    */
-#define IOT_NODE_ACCELZ      3   /* accelerometer Z axis    */
-#define IOT_NODE_ANALOG_IN   4   /* analog input            */
-#define IOT_NODE_ANALOG_OUT  5   /* analog output           */
-#define IOT_NODE_I2C_I       6   /* device find i2c_i       */
-#define IOT_NODE_I2C_A       7   /* device find i2c_a       */
-#define IOT_NODE_BATTERY     8   /* battery voltage         */
-#define IOT_NODE_BATTERY_LV  9   /* battery level           */
-#define IOT_NODE_WIFI_LV    10   /* wifi level              */
-#define IOT_NODE_HEAP       11   /* heap memory             */
-#define IOT_NODE_I2C_IN     12   /* device find i2c_i input */
-#define IOT_READ_CHR    (IOTReadPos - (IOTReadPos / 3) - 1)
-#endif // _MSX0
-
-
 #define FMPAC_MAGIC 0x694D  /* FMPAC SRAM "magic value"      */
 
 #define PGSIZE      0x4000L /* Size of a RAM page            */
@@ -342,9 +324,6 @@ void VDPSync(void);
 void verboseFDC(void);
 void ChangeFMSound(int FMType);
 #endif // TURBO_R
-#ifdef _MSX0
-void ResetIOTData(void);
-#endif // _MSX0
 #ifdef HDD_NEXTOR
 unsigned char LoadPatchedNEXTOR(const char* nextorPath);
 //byte ChangeHDDWithFormat(byte N, const char* FileName, int Format);
