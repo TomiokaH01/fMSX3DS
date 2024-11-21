@@ -276,6 +276,10 @@ int LoadFDI(FDIDisk *D,const char *FileName,int Format)
       for (J = 0; (C2 = fread(Buf, 1, 0x4000, F)) == 0x4000; J += C2);
       if (C2 > 0) J += C2;
 }
+#ifdef HDD_NEXTOR
+  /* If too big size, treat as hard disk image. */
+  if (J >= 2994168) { fclose(F); IsHardDisk = 1; return(0); }
+#endif // HDD_NEXTOR
 //#ifdef ZLIB
 #elif ZLIB
   for(J=0;(I=fread(Buf,1,sizeof(Buf),F));J+=I);
