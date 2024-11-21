@@ -140,6 +140,7 @@ unsigned char Is3DNow = 0;
 #endif // USE_3D
 #ifdef HDD_NEXTOR
 const char* nextorPath = "Nextor-2.1.2.StandaloneASCII16.ROM";
+unsigned char IsHardDisk = 0;
 #endif // HDD_NEXTOR
 
 
@@ -389,6 +390,7 @@ static std::vector<std::string> menuItem =
 	"[Eject Disk]",
 #if defined(HDD_NEXTOR) || defined(HDD_IDE) || defined(MEGASCSI_HD)
 	"[Load HardDisk]",
+	"[Eject HardDisk]",
 #endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
 	"",
 	"<Cassette Tape Files>",
@@ -843,7 +845,7 @@ void BrowseROM(int slotid, int browsetype)
 						if (ChangeHDDWithFormat(0, cfstring.c_str(), FMT_MSXDSK))
 						{
 #ifdef HDD_NEXTOR
-							LoadPatchedNEXTOR("Nextor-2.1.2.StandaloneASCII16.ROM");
+							LoadPatchedNEXTOR(nextorPath);
 #endif // HDD_NEXTOR
 							return;
 						}
@@ -867,6 +869,15 @@ void BrowseROM(int slotid, int browsetype)
 							isLoadDer = 0;
 							AddRecentlyList(savestr, ".DSK");
 							//AddRecentlyList(cfstring, ".DSK");
+						}
+						else if(IsHardDisk)
+						{
+							IsHardDisk = 0;
+							if (ChangeHDDWithFormat(0, cfstring.c_str(), FMT_MSXDSK))
+							{
+								LoadPatchedNEXTOR(nextorPath);
+								return;
+							}
 						}
 					}
 					//else
@@ -1640,6 +1651,18 @@ void BrowseLoadRecently(int slotid, int browsetype)
 								//AddRecentlyList(cfstring, ".DSK");
 								AddRecentlyList(savestr, ".DSK");
 							}
+#ifdef HDD_NEXTOR
+							else if(IsHardDisk)
+							{
+								IsHardDisk = 0;
+								if (ChangeHDDWithFormat(0, cfstring.c_str(), FMT_MSXDSK))
+								{
+									LoadPatchedNEXTOR(nextorPath);
+									return;
+								}
+							}
+#endif // HDD_NEXTOR
+
 #ifdef LOG_ERROR
 					        else
 							{
@@ -3421,6 +3444,17 @@ void systemMenu()
 				BrowseROM(0, BROWSE_HDD);
 				return;
 				//LoadPatchedNEXTOR();
+			}
+			else if (selectmenu == "[Eject HardDisk]")
+			{
+				fclose(HDDStream);
+				HDDStream = 0;
+				HDDSize = 0;
+				EjectFDI(&HDD[0]);
+#ifdef HDD_NEXTOR
+				LoadCart(0, 7, 0);	/* Eject Nextor Disk Driver ROM */
+#endif // HDD_NEXTOR
+				return;
 			}
 #endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
 			else if (selectmenu == "[Load Cassette Tape]")

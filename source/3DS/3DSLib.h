@@ -97,6 +97,11 @@ extern int V9KcurrLine;
 extern unsigned char overClockRatio;
 #endif // USE_OVERCLOCK
 
+#ifdef HDD_NEXTOR
+extern unsigned char IsHardDisk;
+#endif // HDD_NEXTOR
+
+
 #ifdef AUDIO_SYNC
 extern int audioCycleCnt;
 #endif // AUDIO_SYNC
