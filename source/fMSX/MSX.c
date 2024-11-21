@@ -6555,6 +6555,10 @@ byte ChangeDiskWithFormat(byte N, const char* FileName, int Format)
     /* Eject disk if requested */
     if (!FileName) { EjectFDI(&FDD[N]); return(1); }
 
+#ifdef HDD_NEXTOR
+    IsHardDisk = 0;
+#endif // HDD_NEXTOR
+
     /* If FileName not empty, try loading disk image */
     if (*FileName && LoadFDI(&FDD[N], FileName, Format))
     {
@@ -6566,6 +6570,14 @@ byte ChangeDiskWithFormat(byte N, const char* FileName, int Format)
         /* Done */
         return(1);
     }
+
+#ifdef HDD_NEXTOR
+    if (IsHardDisk)
+    {
+        EjectFDI(&FDD[N]);
+        return(0);
+    }
+#endif // HDD_NEXTOR
 
     /* If failed opening existing image, create a new 720kB disk image */
     P = FormatFDI(&FDD[N], FMT_MSXDSK);
