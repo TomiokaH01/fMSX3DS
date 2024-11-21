@@ -32,13 +32,16 @@
 #define CHECK_IOT3(N, A, B, C)        ((IOTCmdData[N] == A) && (IOTCmdData[N + 1] == B) && (IOTCmdData[N + 2] == C))
 
 #define CHECK_IOT4(N, A, B, C, D)     ((IOTCmdData[N] == A) && (IOTCmdData[N + 1] == B) && (IOTCmdData[N + 2] == C)     \
-            && (IOTCmdData[N+3] == D))
+            && (IOTCmdData[N + 3] == D))
 
 #define CHECK_IOT5(N, A, B, C, D, E)  ((IOTCmdData[N] == A) && (IOTCmdData[N + 1] == B) && (IOTCmdData[N + 2] == C)     \
             && (IOTCmdData[N + 3] == D) && (IOTCmdData[N + 4] == E))
 
-#define CHECK_IOT6(N, A, B, C, D, E, F) ((IOTCmdData[N] == A) && (IOTCmdData[N + 1] == B) && (IOTCmdData[N + 2]==C)     \
-            && (IOTCmdData[N + 3] == D) && (IOTCmdData[N +4] == E) && (IOTCmdData[N + 5] == F))
+#define CHECK_IOT6(N, A, B, C, D, E, F) ((IOTCmdData[N] == A) && (IOTCmdData[N + 1] == B) && (IOTCmdData[N + 2] == C)     \
+            && (IOTCmdData[N + 3] == D) && (IOTCmdData[N + 4] == E) && (IOTCmdData[N + 5] == F))
+
+#define CHECK_IOT7(N, A, B, C, D, E, F, G)  ((IOTCmdData[N] == A) && (IOTCmdData[N + 1] == B) && (IOTCmdData[N + 2] == C)   \
+            && (IOTCmdData[N + 3] == D) && (IOTCmdData[N + 4] == E) && (IOTCmdData[N + 5] == F) && (IOTCmdData[N + 6] == G))
 
 unsigned char UseMSX0 = 0;
 unsigned char LoadXBASIC = 0;
@@ -108,7 +111,8 @@ word InMSX0IOT()
             return(ReadIOTGET(osGetWifiStrength()));
 
         case IOT_NODE_HEAP:        /* Heap memory */
-            return (osGetMemRegionFree(MEMREGION_ALL) / 1000);
+            return (ReadIOTGET(osGetMemRegionFree(MEMREGION_ALL) / 1000));
+            //return (osGetMemRegionFree(MEMREGION_ALL) / 1000);
 
         case IOT_NODE_I2C_IN:
             return(ReadIOTGET(IOTVal));
@@ -352,10 +356,56 @@ void OutMSX0IOT(unsigned char val)
             IOTCmdData[IOTCmdPos] = val;
             IOTCmdPos++;
 
-            if (Verbose & 0x20)
-            {
-                printf("IOTPUT Output[%2Xh]\n", val);
-                if (!IOTPUTRestData)printf("IOTPUT Send Data Finished\n");
+            printf("IOTPUT Output[%2Xh]\n", val);
+                if (!IOTPUTRestData)
+                {
+                    printf("IOTPUT Send Data Finished\n");
+
+                    /* analog */
+                    if (CHECK_IOT6(12, 'a', 'n', 'a', 'l', 'o', 'g'))
+                    {
+                        /* "out" */
+                        if (CHECK_IOT3(19, 'o', 'u', 't'))
+                        {
+                            if (MSX0_ANALOGOUT == 1)    /* LED(Analog ooutput) */
+                            {
+                                /* LED with 3DS's Power LED(Unsafe!) */
+                                if (!(DeviceInited & 0x02))
+                                {
+                                    mcuHwcInit();
+                                    DeviceInited |= 0x02;
+                                }
+                                unsigned char ledval = (((word)(val & 0x0F) << 8 | (word)IOTCmdData[5])) >> 4;
+                                MCUHWC_WriteRegister(0x28, &ledval, 1);    // i2c Register 0x28 for 3DS 	Brightness of the WiFi/Power LED
+                                                                            //https://www.3dbrew.org/wiki/I2C_Registers#Device_3
+                            }
+                            if (Verbose & 0x20)
+                                printf("Analog Out[%d]\n", val << 8 | IOTCmdData[5]);
+                            IOTCmdPos = 0;
+                            return;
+                        }
+                    }
+                    else if (IOTCmdData[5] == 0x94) /* AXP192 GPIO1 control register 0x94. MSX0 Power Indicator LED */
+                    {
+                        if (Verbose & 0x20)
+                            printf("IOTPUT AXP192[%d]\n", val);
+                        /* LED with 3DS's Power LED(Unsafe!) */
+                        if (!(DeviceInited & 0x02))
+                        {
+                            mcuHwcInit();
+                            DeviceInited |= 0x02;
+                        }
+                        IOTVal = val;
+                        /* Info from Ninune-wa. */
+                        /* https://github.com/Ninune-wa/MSX0-Sensor-Utility/tree/main/MSX0Stack-LED(PowerIndicatorLight) */
+                        /* GPIO1 bit1 1:disable 0:enable */
+                        if (val & 0x02)MCUHWC_SetPowerLedState(LED_OFF);
+                        else MCUHWC_SetPowerLedState(LED_BLUE);
+                        IOTCmdPos = 0;
+                        return;
+                    }
+                    if (Verbose & 0x20)
+                        printf("IOTPUT to Unkown module[%2Xh]\n", val);
             }
             return;
         }
@@ -372,10 +422,10 @@ void OutMSX0IOT(unsigned char val)
         if ((val == 0x80) && ((IOTCmdData[2] & 0xF0) == 0x00))
         {
             /* "device" */
-            if (IOTCmdData[5] == 'd' && IOTCmdData[6] == 'e' && IOTCmdData[7] == 'v' && IOTCmdData[8] == 'i' && IOTCmdData[9] == 'c' && IOTCmdData[10] == 'e')
+            if (CHECK_IOT6(5, 'd', 'e', 'v', 'i', 'c', 'e'))
             {
                 /* "accel" */
-                if (IOTCmdData[12] == 'a' && IOTCmdData[13] == 'c' && IOTCmdData[14] == 'c' && IOTCmdData[15] == 'e' && IOTCmdData[16] == 'l')
+                if(CHECK_IOT5(12, 'a', 'c', 'c', 'e', 'l'))
                 {
 #ifdef _3DS
                     if (!(DeviceInited & 0x01))
@@ -406,10 +456,9 @@ void OutMSX0IOT(unsigned char val)
                     }
                 }
                 /* "analog" */
-                if (IOTCmdData[12] == 'a' && IOTCmdData[13] == 'n' && IOTCmdData[14] == 'a' && IOTCmdData[15] == 'l' && IOTCmdData[16] == 'o' && IOTCmdData[17] == 'g')
+                if(CHECK_IOT6(12, 'a', 'n', 'a', 'l', 'o', 'g'))
                 {
                     /* "in" */
-                    //if (IOTCmdData[19] == 'i' && IOTCmdData[20] == 'n')
                     if(CHECK_IOT2(19, 'i', 'n'))
                     {
                         IOTMode = IOT_NODE_ANALOG_IN;
@@ -418,7 +467,7 @@ void OutMSX0IOT(unsigned char val)
                     }
                 }
                 /* i2c_i */
-                if (IOTCmdData[12] == 'i' && IOTCmdData[13] == '2' && IOTCmdData[14] == 'c' && IOTCmdData[15] == '_' && IOTCmdData[16] == 'i')
+                if(CHECK_IOT5(12, 'i', '2', 'c', '_', 'i'))
                 {
                     IOTMode = IOT_NODE_I2C_IN;
                     IOTCmdPos = 0;
@@ -426,16 +475,13 @@ void OutMSX0IOT(unsigned char val)
                 }
             }
             /* "host" */
-            //else if (IOTCmdData[5] == 'h' && IOTCmdData[6] == 'o' && IOTCmdData[7] == 's' && IOTCmdData[8] == 't')
             else if(CHECK_IOT4(5, 'h', 'o', 's', 't'))
             {
                 /* "battery" */
-                if (IOTCmdData[10] == 'b' && IOTCmdData[11] == 'a' && IOTCmdData[12] == 't' && IOTCmdData[13] == 't' && IOTCmdData[14] == 'e'
-                    && IOTCmdData[15] == 'r' && IOTCmdData[16] == 'y')
+                if(CHECK_IOT7(10, 'b', 'a', 't', 't', 'e', 'r', 'y'))
                 {
                     /* "current" */
-                    if (IOTCmdData[18] == 'c' && IOTCmdData[19] == 'u' && IOTCmdData[20] == 'r' && IOTCmdData[21] == 'r' && IOTCmdData[22] == 'e'
-                        && IOTCmdData[23] == 'n' && IOTCmdData[24] == 't')
+                    if(CHECK_IOT7(18, 'c', 'u', 'r', 'r', 'e', 'n', 't'))
                     {
                         if (!(DeviceInited & 0x02))
                         {
@@ -446,7 +492,8 @@ void OutMSX0IOT(unsigned char val)
                         IOTCmdPos = 0;
                         return;
                     }
-                    if (IOTCmdData[18] == 'l' && IOTCmdData[19] == 'e' && IOTCmdData[20] == 'v' && IOTCmdData[21] == 'e' && IOTCmdData[22] == 'l')
+                    /* "level" */
+                    if(CHECK_IOT5(18, 'l', 'e', 'v', 'e', 'l'))
                     {
                         if (!(DeviceInited & 0x02))
                         {
@@ -458,7 +505,8 @@ void OutMSX0IOT(unsigned char val)
                         return;
                     }
                 }
-                if (IOTCmdData[10] == 'w' && IOTCmdData[11] == 'i' && IOTCmdData[12] == 'f' && IOTCmdData[13] == 'i')
+                /* "wifi" */
+                if(CHECK_IOT4(10, 'w', 'i', 'f', 'i'))
                 {
                     if (IOTCmdData[15] == 'l' && IOTCmdData[16] == 'e' && IOTCmdData[17] == 'v' && IOTCmdData[18] == 'e' && IOTCmdData[19] == 'l')
                     {
@@ -467,7 +515,7 @@ void OutMSX0IOT(unsigned char val)
                         return;
                     }
                 }
-                //if (IOTCmdData[10] == 'h' && IOTCmdData[11] == 'e' && IOTCmdData[12] == 'a' && IOTCmdData[13] == 'p')
+                /* "heap" */
                 if(CHECK_IOT4(10, 'h', 'e', 'a', 'p'))
                 {
                     IOTMode = IOT_NODE_HEAP;
@@ -475,13 +523,18 @@ void OutMSX0IOT(unsigned char val)
                     return;
                 }
             }
-            else if (IOTCmdData[5] == 'm' && IOTCmdData[6] == 's' && IOTCmdData[7]== 'x' && IOTCmdData[15] =='c' && IOTCmdData[16]=='p' && IOTCmdData[17]=='u')
+            else if (CHECK_IOT3(5, 'm', 's', 'x'))
             {
-                if (IOTCmdData[19] == 'l' && IOTCmdData[20] == 'o' && IOTCmdData[21] == 'a' && IOTCmdData[22] == 'd')
+                /* "msx/me/pm/cpu", "msx/u0/pm/cpu", "msx/u1/pm/cpu" (Only check "msx" and "cpu") */
+                if (CHECK_IOT3(15, 'c', 'p', 'u'))
                 {
-                    IOTMode = IOT_NODE_CPU_LOAD;
-                    IOTCmdPos = 0;
-                    return;
+                    /* "load" */
+                    if (CHECK_IOT4(19, 'l', 'o', 'a', 'd'))
+                    {
+                        IOTMode = IOT_NODE_CPU_LOAD;
+                        IOTCmdPos = 0;
+                        return;
+                    }
                 }
             }
             IOTMode = 0;
@@ -492,9 +545,9 @@ void OutMSX0IOT(unsigned char val)
         if ((val == 0x80) && ((IOTCmdData[2] & 0xF0) == 0x10))
         {
             /* "device" */
-            if (IOTCmdData[5] == 'd' && IOTCmdData[6] == 'e' && IOTCmdData[7] == 'v' && IOTCmdData[8] == 'i' && IOTCmdData[9] == 'c' && IOTCmdData[10] == 'e')
+            if(CHECK_IOT6(5, 'd', 'e', 'v', 'i', 'c', 'e'))
             {
-                if (IOTCmdData[12] == 'i' && IOTCmdData[13] == '2' && IOTCmdData[14] == 'c' && IOTCmdData[15] == '_')
+                if(CHECK_IOT4(12, 'i', '2', 'c', '_'))
                 {
                     /* "i2c_i" */
                     if (IOTCmdData[16] == 'i')
@@ -544,58 +597,6 @@ void OutMSX0IOT(unsigned char val)
         }
         break;
 #endif // MSX0_OLED
-
-    case 6:
-        /* IOTPUT Output */
-        if ((IOTCmdData[2] & 0xF0) == 0x40)
-        {
-            /* analog */
-            if (IOTCmdData[12] == 'a' && IOTCmdData[13] == 'n' && IOTCmdData[14] == 'a' && IOTCmdData[15] == 'l' && IOTCmdData[16] == 'o' && IOTCmdData[17] == 'g')
-            {
-                /* "out" */
-                if (IOTCmdData[19] == 'o' && IOTCmdData[20] == 'u' && IOTCmdData[21] == 't')
-                {
-                    if (MSX0_ANALOGOUT == 1)    /* LED(Analog ooutput) */
-                    {
-                        /* LED with 3DS's Power LED(Unsafe!) */
-                        if (!(DeviceInited & 0x02))
-                        {
-                            mcuHwcInit();
-                            DeviceInited |= 0x02;
-                        }
-                        unsigned char ledval = (((word)(val & 0x0F) << 8 | (word)IOTCmdData[5])) >> 4;
-                        MCUHWC_WriteRegister(0x28, &ledval, 1);    // i2c Register 0x28 for 3DS 	Brightness of the WiFi/Power LED
-                                                                    //https://www.3dbrew.org/wiki/I2C_Registers#Device_3
-                    }
-                    if (Verbose & 0x20)
-                        printf("Analog Out[%d]\n", val << 8 | IOTCmdData[5]);
-                    IOTCmdPos = 0;
-                    return;
-                }
-            }
-            else if (IOTCmdData[5] == 0x94) /* AXP192 GPIO1 control register 0x94. MSX0 Power Indicator LED */
-            {
-                if (Verbose & 0x20)
-                    printf("IOTPUT AXP192[%d]\n", val);
-                /* LED with 3DS's Power LED(Unsafe!) */
-                if (!(DeviceInited & 0x02))
-                {
-                    mcuHwcInit();
-                    DeviceInited |= 0x02;
-                }
-                IOTVal = val;
-                /* Info from Ninune-wa. */
-                /* https://github.com/Ninune-wa/MSX0-Sensor-Utility/tree/main/MSX0Stack-LED(PowerIndicatorLight) */
-                /* GPIO1 bit1 1:disable 0:enable */
-                if (val & 0x02)MCUHWC_SetPowerLedState(LED_OFF);
-                else MCUHWC_SetPowerLedState(LED_BLUE);
-                IOTCmdPos = 0;
-                return;
-            }
-            if (Verbose & 0x20)
-                printf("IOTPUT to Unkown module[%2Xh]\n", val);
-        }
-        break;
     default:
         break;
     }
