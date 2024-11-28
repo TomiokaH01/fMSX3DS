@@ -278,7 +278,50 @@ int LoadFDI(FDIDisk *D,const char *FileName,int Format)
 }
 #ifdef HDD_NEXTOR
   /* If too big size, treat as hard disk image. */
-  if (J >= 2994168) { fclose(F); IsHardDisk = 1; return(0); }
+  if ((J >= 2994168) || (IsHardDisk))
+  {
+      if (HDD[0].Data != NULL)
+      {
+          P = (byte*)realloc(HDD[0].Data, J);
+          if (P == NULL)
+          {
+              free(HDD[0].Data);
+              P = (byte*)malloc(J);
+          }
+      }
+      else
+      {
+          P = (byte*)malloc(J);
+      }
+      //HDD[0].Data = P;
+
+      //EjectFDI(&HDD[0]);
+      //P = (byte*)malloc(J);
+      if (!P)
+      {
+          //fclose(F);
+          //HDDSize = 0;
+          //IsHardDisk = 0;
+          //return(0);
+
+          /* If cann't get memory, directly read files. */
+          if (!(F = freopen(FileName, "rb+", F))) { IsHardDisk = 0; return(0); }
+
+          fclose(HDDStream);
+          HDDStream = F;
+          IsHardDisk = 1;
+          HDDSize = J;
+          return(0);
+      }
+      rewind(F);
+      fread(P, 1, J, F);
+      HDD[0].Data = P;
+      HDD[0].DataSize = J;
+      fclose(F);
+      IsHardDisk = 1;
+      HDDSize = J;
+      return(0);
+  }
 #endif // HDD_NEXTOR
 //#ifdef ZLIB
 #elif ZLIB
