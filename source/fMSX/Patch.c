@@ -947,6 +947,7 @@ case 0x4169:
 #endif // HDD_NEXTOR
 
 default:
+    if(Verbose)
   printf("Unknown BIOS trap called at PC=%04Xh\n",R->PC.W-2);
 
   }
