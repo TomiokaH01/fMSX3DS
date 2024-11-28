@@ -184,27 +184,48 @@ byte* LinearHDD(byte ID, int SectorN, byte PerTrack, byte Heads)
 
 byte HDDRead(byte ID, byte* Buf, int N, byte PerTrack, byte Heads)
 {
-    //byte* P;
-    //P = LinearHDD(ID, N, PerTrack, Heads);
-    //if (P) memcpy(Buf, P, 512);
-    //return(!!P);
+    if (HDDStream)
+    {
+        fseek(HDDStream, N * 512, SEEK_SET);
+        if (fread(Buf, 512, 1, HDDStream))return 1;
+        else return 0;
+    }
+    byte* P;
+    P = LinearHDD(ID, N, PerTrack, Heads);
+    if (P) memcpy(Buf, P, 512);
+    return(!!P);
 
-    fseek(HDDStream, N * 512, SEEK_SET);
-    if (fread(Buf, 512, 1, HDDStream))return 1;
-    else return 0;
+    //fseek(HDDStream, N * 512, SEEK_SET);
+    //if (fread(Buf, 512, 1, HDDStream))return 1;
+    //else return 0;
 }
 
 
 byte HDDWrite(byte ID, byte* Buf, int N, byte PerTrack, byte Heads)
 {
-    //byte* P;
-    //P = LinearHDD(ID, N, PerTrack, Heads);
-    //if (P) memcpy(P, Buf, 512);
-    //return(!!P);
+    if (HDDStream)
+    {
+        fseek(HDDStream, N * 512, SEEK_SET);
+        if (fwrite(Buf, 512, 1, HDDStream))
+        {
+            HDDWrited = 1;
+            return 1;
+        }
+        else return 0;
+    }
+    byte* P;
+    HDDWrited = 1;
+    P = LinearHDD(ID, N, PerTrack, Heads);
+    if (P) memcpy(P, Buf, 512);
+    return(!!P);
 
-    fseek(HDDStream, N * 512, SEEK_SET);
-    if (fwrite(Buf, 512, 1, HDDStream))return 1;
-    else return 0;
+    //fseek(HDDStream, N * 512, SEEK_SET);
+    //if (fwrite(Buf, 512, 1, HDDStream))
+    //{
+    //    HDDWrited = 1;
+    //    return 1;
+    //}
+    //else return 0;
 }
 
 #endif // HDD_NEXTOR
@@ -849,7 +870,15 @@ case 0x4160:
     /* .NRDY error */
     //if(!HDD[R->AF.B.h].Data){R->AF.B.h = 0xFC;return;}
     //if (!HDD[0].Data) { R->AF.B.h = 0xFC; return; }
-    if (!HDDStream) { R->AF.B.h = 0xFC; return; }
+    if (!HDD[0].Data)
+    {
+        if (!HDDStream)
+        {
+            R->AF.B.h = 0xFC;
+            return;
+        }
+    }
+    //if (!HDDStream) { R->AF.B.h = 0xFC; return; }
 
     /* Save slot states */
     //PS = PSLReg;

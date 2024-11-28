@@ -480,6 +480,7 @@ int audioCycleCnt = 0;
 FDIDisk HDD[2];
 FILE* HDDStream;
 int HDDSize;
+char HDDWrited = 0;
 #endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
 #ifdef MEGASCSI_HD
 MB89352A spc;
@@ -997,6 +998,7 @@ void TrashMSX(void)
 
 #ifdef  _3DS
     DoAutoSave();
+    DoAutoSaveHDD();
     WriteOptionCFG();
     TrashMSX0();
 #endif //  _3DS
@@ -6180,6 +6182,19 @@ unsigned char LoadPatchedNEXTOR(const char* nextorPath)
 {
     byte J, * P;
     //NeedRest = 0;
+    /* If already loaded NEXTOR driver ROM, return.  */
+    if (ROMData[7])
+    {
+        if (ROMLen[7] >= 0x1C11A)
+        {
+            if ((ROMData[7][0x1C116] == 'N') && (ROMData[7][0x1C117] == 'e') && (ROMData[7][0x1C118] == 'x') && (ROMData[7][0x1C119] == 't')
+                && (ROMData[7][0x1C11A] == 'o') && (ROMData[7][0x1C11B] == 'r'))
+            {
+                ResetMSX(Mode, RAMPages, VRAMPages);
+                return 0;
+            }
+        }
+    }
     if (LoadCart(nextorPath, 7, MAP_ASCII16))
     {
         ROMData[7][0x1C10E] = 0x01;
@@ -6502,7 +6517,7 @@ static byte* ResizeMemory(byte * Buf, int Size)
     byte* P;
     if (Buf != NULL)
     {
-        P = realloc(Buf, Size);
+        P = (byte*)realloc(Buf, Size);
         if (P == NULL)
         {
             free(Buf);
@@ -6574,7 +6589,6 @@ byte ChangeDiskWithFormat(byte N, const char* FileName, int Format)
 #ifdef HDD_NEXTOR
     if (IsHardDisk)
     {
-        EjectFDI(&FDD[N]);
         return(0);
     }
 #endif // HDD_NEXTOR
@@ -7305,32 +7319,33 @@ byte ChangeHDDWithFormat(byte N, const char* FileName, int Format)
     /* Eject disk if requested */
     if (!FileName) { EjectFDI(&HDD[N]); return(1); }
 
-    /* If FileName not empty, try loading disk image */
-    if (!(F = zipfopen(FileName, "rb+"))) return(0);
+    ///* If FileName not empty, try loading disk image */
+    //if (!(F = zipfopen(FileName, "rb+"))) return(0);
 
     EjectFDI(&HDD[N]);
 
-    if (!fseek(F, 0, SEEK_END)) HDDSize = ftell(F);
-    else
-    {
-        HDDSize = 0;
-        /* Read file in 16kB increments */
-        while ((J = fread(EmptyRAM, 1, 0x4000, F)) == 0x4000) HDDSize += J;
-        if (J > 0) HDDSize += J;
-        /* Clean up the EmptyRAM! */
-        memset(EmptyRAM, NORAM, 0x4000);
-    }
-    /* Rewind file to the beginning */
-    rewind(F);
+    //if (!fseek(F, 0, SEEK_END)) HDDSize = ftell(F);
+    //else
+    //{
+    //    HDDSize = 0;
+    //    /* Read file in 16kB increments */
+    //    while ((J = fread(EmptyRAM, 1, 0x4000, F)) == 0x4000) HDDSize += J;
+    //    if (J > 0) HDDSize += J;
+    //    /* Clean up the EmptyRAM! */
+    //    memset(EmptyRAM, NORAM, 0x4000);
+    //}
+    // /* Rewind file to the beginning */
+    //rewind(F);
 
-    fclose(HDDStream);
-    HDDStream = F;
+    //fclose(HDDStream);
+    //HDDStream = F;
 
-    //if (!(P = LoadROM(FileName, Size, 0)))return(0);
-    //HDD[N].Data = P;
-    //HDD[N].DataSize = Size;
+    //fclose(F);
+    if (!(P = LoadROM(FileName, HDDSize, 0)))return(0);
+    HDD[N].Data = P;
+    HDD[N].DataSize = HDDSize;
     //HDD[N].Format = Format;
-    if (Verbose)printf("Load HardDisk Image Size %d", Size);
+    if (Verbose)printf("Load HardDisk Image Size %d", HDDSize);
 
 #ifdef MEGASCSI_HD
     MB89352A_Init(&spc);

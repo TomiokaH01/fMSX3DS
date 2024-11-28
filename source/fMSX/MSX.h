@@ -333,6 +333,7 @@ void LoadNEXTOR();
 byte ChangeHDDIDEWithFormat(byte N, const char* FileName, int Format);
 #endif // HDD_IDE
 #if defined(HDD_NEXTOR) ||  defined(MEGASCSI_HD)
+extern char HDDWrited;
 byte ChangeHDDWithFormat(byte N, const char* FileName, int Format);
 #endif // HDD_NEXTOR    MEGASCSI_HD
 
