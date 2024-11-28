@@ -141,6 +141,7 @@ unsigned char Is3DNow = 0;
 #ifdef HDD_NEXTOR
 const char* nextorPath = "Nextor-2.1.2.StandaloneASCII16.ROM";
 unsigned char IsHardDisk = 0;
+static std::string HDDStr = "";
 #endif // HDD_NEXTOR
 
 
@@ -588,10 +589,11 @@ void Init3DS()
 	debugFile = fmemopen(debugBuf, 0x10000, "r+");
 	//Verbose = 0x2C;	/*  0x02:VDP Command,  0x04:Disk IO,  0x8:MAP ROM, 0x20:IO Port,  0x40:MSXTurboR , 0x80:V9990 */
 	//Verbose = 0x20;
-	Verbose = 0xA0;
+	//Verbose = 0xA0;
 	//Verbose = 0x44;
 	//Verbose = 9;
 	//Verbose = 4;
+	Verbose = 1;
 #endif // DEBUG_LOG
 }
 
@@ -842,17 +844,18 @@ void BrowseROM(int slotid, int browsetype)
 #if defined(HDD_NEXTOR) || defined(HDD_IDE) || defined(MEGASCSI_HD)
 					if (browsetype == BROWSE_HDD)
 					{
-						if (ChangeHDDWithFormat(0, cfstring.c_str(), FMT_MSXDSK))
-						{
+						//if (ChangeHDDWithFormat(0, cfstring.c_str(), FMT_MSXDSK))
+						//{
 #ifdef HDD_NEXTOR
 							LoadPatchedNEXTOR(nextorPath);
 #endif // HDD_NEXTOR
 							return;
-						}
-						return;
+						//}
+						//return;
 					}
 #endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
 					AutoSaveDisk(slotid);
+					AutoSaveHDD();
 					std::string currstr = getZipSaveDiskPath(cfstring, extname);
 					std::string savestr;
 					savestr = cfstring;
@@ -872,12 +875,14 @@ void BrowseROM(int slotid, int browsetype)
 						}
 						else if(IsHardDisk)
 						{
-							if (ChangeHDDWithFormat(0, cfstring.c_str(), FMT_MSXDSK))
-							{
+							//AutoSaveHDD();
+							//if (ChangeHDDWithFormat(0, cfstring.c_str(), FMT_MSXDSK))
+							//{
+								HDDStr = currstr;
 								AddRecentlyList(savestr, ".DSK");
 								LoadPatchedNEXTOR(nextorPath);
 								return;
-							}
+							//}
 						}
 					}
 					//else
@@ -1634,6 +1639,7 @@ void BrowseLoadRecently(int slotid, int browsetype)
 					else if (strcasecmp(extname, ".DSK") == 0)
 					{
 						AutoSaveDisk(slotid);
+						AutoSaveHDD();
 						std::string currstr = getZipSaveDiskPath(cfstring, extname);
 						std::string savestr;
 						savestr = cfstring;
@@ -1654,12 +1660,14 @@ void BrowseLoadRecently(int slotid, int browsetype)
 #ifdef HDD_NEXTOR
 							else if(IsHardDisk)
 							{
-								if (ChangeHDDWithFormat(0, cfstring.c_str(), FMT_MSXDSK))
-								{
+								//AutoSaveHDD();
+								//if (ChangeHDDWithFormat(0, cfstring.c_str(), FMT_MSXDSK))
+								//{
+									HDDStr = currstr;
 									AddRecentlyList(savestr, ".DSK");
 									LoadPatchedNEXTOR(nextorPath);
 									return;
-								}
+								//}
 							}
 #endif // HDD_NEXTOR
 
@@ -1911,7 +1919,7 @@ void AutoSaveDisk(int slotid)
 	if (!DiskWrited[slotid])return;
 	if (DiskStr[slotid].size() < 3)return;
 	std::string tempstr = std::string(DiskStr[slotid]);
-	tempstr.erase(tempstr.begin(), tempstr.begin()+((int)tempstr.find("/SAVEDISK/")+10));
+	tempstr.erase(tempstr.begin(), tempstr.begin()+((int)tempstr.find("/SAVEDISK/")+10));	/* Erase path from the beginning to "/SAVEDISK/" . */
 	if (tempstr.find("/") != std::string::npos)
 	{
 		tempstr = std::string(DiskStr[slotid]);
@@ -1920,6 +1928,33 @@ void AutoSaveDisk(int slotid)
 	}
 
 	if(SaveFDI(&FDD[slotid], DiskStr[slotid].c_str(), FMT_MSXDSK))DiskWrited[slotid] = 0;
+}
+
+
+void AutoSaveHDD()
+{
+	if (!HDDWrited)return;
+	if (HDDStr.size() < 3)return;
+	if (!HDD[0].Data)return;
+	std::string tempstr = std::string(HDDStr);
+	tempstr.erase(tempstr.begin(), tempstr.begin() + ((int)tempstr.find("/SAVEDISK/") + 10));	/* Erase path from the beginning to "/SAVEDISK/" . */
+	if (tempstr.find("/") != std::string::npos)
+	{
+		tempstr = std::string(HDDStr);
+		tempstr.erase(tempstr.find_last_of("/"));
+		mkdir(tempstr.c_str(), 0777);
+	}
+
+	FILE* F = fopen(HDDStr.c_str(), "w");
+	if (fwrite(HDD[0].Data, sizeof(byte), HDDSize, F))HDDWrited = 0;
+	fclose(F);
+
+	//byte* Buf = (byte*)malloc(HDDSize);
+	//rewind(HDDStream);
+	//if (!fread(Buf, sizeof(unsigned char), HDDSize, HDDStream))return;
+	//FILE* F = fopen(HDDStr.c_str(), "w");
+	//if(fwrite(Buf, sizeof(byte), HDDSize, F))HDDWrited = 0;
+	//fclose(F);
 }
 
 
@@ -2721,6 +2756,31 @@ void DoAutoSave()
 }
 
 
+#ifdef HDD_NEXTOR
+void DoAutoSaveHDD()
+{
+	if (!HDDWrited)return;
+	if (HDDStr.size() < 3)return;
+	if (!HDD[0].Data)return;
+	FILE* F = fopen(HDDStr.c_str(), "w");
+	fwrite(HDD[0].Data, sizeof(byte), HDDSize, F);
+	fclose(F);
+	return;
+
+	//if (!HDDStream)return;
+	//if (!HDDWrited)return;
+	//byte* Buf = (byte*)malloc(HDDSize);
+	//rewind(HDDStream);
+	//if (!fread(Buf, sizeof(unsigned char), HDDSize, HDDStream))return;
+	//FILE* F = fopen(HDDStr.c_str(), "w");
+	//fwrite(Buf, sizeof(byte), HDDSize, F);
+	//fclose(F);
+	//return;
+}
+#endif // HDD_NEXTOR
+
+
+
 void GetMovedMenuIndex(int &selectidx, int &startidx, int val,int maxcount)
 {
 	selectidx += val;
@@ -3451,6 +3511,7 @@ void systemMenu()
 				HDDStream = 0;
 				HDDSize = 0;
 				EjectFDI(&HDD[0]);
+				HDDStr = "";
 #ifdef HDD_NEXTOR
 				LoadCart(0, 7, 0);	/* Eject Nextor Disk Driver ROM */
 #endif // HDD_NEXTOR

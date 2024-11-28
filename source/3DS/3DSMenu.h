@@ -99,6 +99,11 @@ char* StringToChar(std::string str);
 void Debug_BreakPoint3DS(const char* message);
 int GetSoftKeyInput(char* text);
 
+//#ifdef HDD_NEXTOR
+//void AutoSaveHDD();
+//#endif // HDD_NEXTOR
+
+
 #ifdef DEBUGGER_3DS
 void DebuggerBottomScreen();
 bool BrowseDebuggerMenu();

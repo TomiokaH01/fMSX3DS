@@ -246,6 +246,11 @@ int CalcCRC32(void* Buf, const char* filePath, int Size);
 void CheckSpecialCart(void* Buf, int Size, int Type, int Slot);
 void LoadCartAtStart();
 void InitXbuf();
+
+#ifdef HDD_NEXTOR
+void DoAutoSaveHDD();
+void AutoSaveHDD();
+#endif // HDD_NEXTOR
 #ifdef SUPERIMPOSE
 void InitScreenShotTexture(SDL_Surface* ssurface);
 void ChangeScreenImposeTransparent(int alpha);

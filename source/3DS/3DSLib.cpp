@@ -80,6 +80,8 @@ Tex3DS_SubTexture WideSubTex;
 extern C3D_RenderTarget *TopRenderTarget;
 extern C3D_RenderTarget* WideRenderTarget;
 extern C3D_RenderTarget* BottomRenderTartget;
+unsigned char* zipBuf;
+
 #ifdef USE_3D
 C2D_Image ScreenImageR;
 C3D_Tex ScreenTexR;
@@ -2936,10 +2938,28 @@ FILE* zipfopen(const char* _name, const char* _mode)
 				{
 					unzOpenCurrentFile(zipFile);
 					int unzipsize = fileInfo.uncompressed_size;
-					char* tempbuf;
-					tempbuf = (char*)malloc(unzipsize);
-					int err = unzReadCurrentFile(zipFile, tempbuf, unzipsize);
-					F = fmemopen(tempbuf, unzipsize, _mode);
+					//char* tempbuf;
+					//tempbuf = (char*)malloc(unzipsize);
+					//int err = unzReadCurrentFile(zipFile, tempbuf, unzipsize);
+					//F = fmemopen(tempbuf, unzipsize, _mode);
+
+					/* 3DS:Use realloc() insted of malloc() to get rid of memory read error which occurs with large size of ZIP file(HardDisk Image etc). */
+					if (zipBuf != NULL)
+					{
+						zipBuf = (unsigned char*)realloc(zipBuf, unzipsize);
+						if (zipBuf == NULL)
+						{
+							free(zipBuf);
+							zipBuf = (unsigned char*)malloc(unzipsize);
+						}
+					}
+					else
+					{
+						zipBuf = (unsigned char*)malloc(unzipsize);
+					}
+					int err = unzReadCurrentFile(zipFile, zipBuf, unzipsize);
+					F = fmemopen(zipBuf, unzipsize, _mode);
+
 					unzCloseCurrentFile(zipFile);
 					unzClose(zipFile);
 					return F;
