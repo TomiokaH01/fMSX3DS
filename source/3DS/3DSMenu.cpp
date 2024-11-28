@@ -872,9 +872,9 @@ void BrowseROM(int slotid, int browsetype)
 						}
 						else if(IsHardDisk)
 						{
-							IsHardDisk = 0;
 							if (ChangeHDDWithFormat(0, cfstring.c_str(), FMT_MSXDSK))
 							{
+								AddRecentlyList(savestr, ".DSK");
 								LoadPatchedNEXTOR(nextorPath);
 								return;
 							}
@@ -1654,9 +1654,9 @@ void BrowseLoadRecently(int slotid, int browsetype)
 #ifdef HDD_NEXTOR
 							else if(IsHardDisk)
 							{
-								IsHardDisk = 0;
 								if (ChangeHDDWithFormat(0, cfstring.c_str(), FMT_MSXDSK))
 								{
+									AddRecentlyList(savestr, ".DSK");
 									LoadPatchedNEXTOR(nextorPath);
 									return;
 								}
