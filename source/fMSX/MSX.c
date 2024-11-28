@@ -7306,7 +7306,7 @@ byte ChangeHDDWithFormat(byte N, const char* FileName, int Format)
     if (!FileName) { EjectFDI(&HDD[N]); return(1); }
 
     /* If FileName not empty, try loading disk image */
-    if (!(F = zipfopen(FileName, "rb"))) return(0);
+    if (!(F = zipfopen(FileName, "rb+"))) return(0);
 
     EjectFDI(&HDD[N]);
 

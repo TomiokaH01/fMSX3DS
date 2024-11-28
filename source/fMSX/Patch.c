@@ -203,7 +203,7 @@ byte HDDWrite(byte ID, byte* Buf, int N, byte PerTrack, byte Heads)
     //return(!!P);
 
     fseek(HDDStream, N * 512, SEEK_SET);
-    if (fwrite(Buf, N * 512, 1, HDDStream))return 1;
+    if (fwrite(Buf, 512, 1, HDDStream))return 1;
     else return 0;
 }
 
