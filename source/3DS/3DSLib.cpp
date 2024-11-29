@@ -3065,6 +3065,7 @@ int CalcCRC32(void* Buf, const char* filePath, int Size)
 					else if (mapstr == "PLAIN")I = MAP_PLAIN;
 					else if (mapstr == "WingWarr")I = MAP_WingWarr;
 					else if (mapstr == "SYNTHE")I = MAP_SYNTHE;
+					else if (mapstr == "QURAN")I = MAP_QURAN;
 					Retval = I;
 					break;
 				}
@@ -3148,6 +3149,9 @@ void CheckSpecialCart(void* Buf, int Size, int Type, int Slot)
 		case MAP_MEGASCSI:
 			CartSpecial[Slot] = CART_MEGASCSI;
 			break;
+		case MAP_QURAN:
+			CartSpecial[Slot] = CART_ARABIC;
+			break;
 		default:
 			CartSpecial[Slot] = 0;
 			break;
@@ -3167,6 +3171,18 @@ void CheckSpecialCart(void* Buf, int Size, int Type, int Slot)
 	else if (CartSpecial[Slot] == CART_ARKANOID)
 	{
 		if (currJoyMode[0] != JOY_ARKANOID)currJoyMode[0] = JOY_ARKANOID;
+	}
+
+	if (OldCartSpecial == CART_ARABIC && CartSpecial[Slot] != CART_ARABIC)
+	{
+#ifdef HDD_NEXTOR
+		if ((HDD->Data) || (HDDStream))return;
+#endif // HDD_NEXTOR
+		 LoadCart(0, 7, 0);
+	}
+	else if(CartSpecial[Slot] == CART_ARABIC)
+	{
+		LoadCart("ARABIC.rom", 7, MAP_GUESS);
 	}
 
 	if (!Slot && OldCartSpecial == CART_FMBUG && CartSpecial[Slot] != CART_FMBUG)LoadCart(0, 1, 0);

@@ -121,6 +121,7 @@ extern int audioCycleCnt;
 #define CART_NEED_CBIOS	11	/* Need C-BIOS to wrok on MSX2+. */
 #define CART_SLOTBUG	12	/* Does'nt work on MSX with Slot Expanded. */
 #define CART_MEGASCSI	13	/* MEGA-SCSI cartridge for Hard Disk etc. */
+#define CART_ARABIC		14	/* Need Arabic BIOS ROM. */
 
 	
 #define CBIOS_BR	0	/* C-BIOS Brazil */
