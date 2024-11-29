@@ -123,8 +123,9 @@ extern "C" {
 #define MAP_SYNTHE     30   /* Konami's Synthesizer          */
 #define MAP_ASCII16Big 31   /* ASCII16 over 2MB size.        */
 #define MAP_MEGASCSI   32   /* Ese RAM/Mega SCSI             */
-//#define MAP_PANSONIC   31   /* Firmware ROM for Panasonic MSX*/
-#define MAP_GUESS      33   /* Guess mapper automatically    */
+#define MAP_QURAN      33   /* Holy Quran                    */
+//#define MAP_PANSONIC   34   /* Firmware ROM for Panasonic MSX*/
+#define MAP_GUESS      34   /* Guess mapper automatically    */
 
 #define MAP_SRAM(N) \
   (((N)==MAP_ASCII8)||((N)==MAP_ASCII16)|| ((N)==MAP_ASCII16Big) || \

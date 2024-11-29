@@ -4692,6 +4692,22 @@ void MapROM(register word A, register byte V)
         }
 #endif // MEGASCSI_HD
         break;
+    case MAP_QURAN:
+        if ((A >= 0x5000) && (A < 0x6000))
+        {
+            J = (A - 0x5000) >> 10;
+            /* Switch ROM pages */
+            V &= ROMMask[I];
+            if (V != ROMMapper[I][J])
+            {
+                RAM[J + 2] = MemMap[PS][SS][J + 2] = ROMData[I] + ((int)V << 13);
+                ROMMapper[I][J] = V;
+            }
+            if (Verbose & 0x08)
+                printf("ROM-MAPPER %c: 8kB ROM page #%d at %d:%d:%04Xh\n", I + 'A', V, PS, SS, J * 0x2000 + 0x4000);
+            return;
+        }
+        break;
 #endif //   TURBO_R
     }
 
