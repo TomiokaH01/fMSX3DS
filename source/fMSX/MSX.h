@@ -313,7 +313,7 @@ void LoadESESCC(int Slot, int RamSize);
 void LoadESERAM(int Slot, int RamSize);
 void SetNonMegaROM(byte Slot);
 byte ReadRAM(word A);
-static byte* ResizeMemory(byte* Buf, int Size);
+//static byte* ResizeMemory(byte* Buf, int Size);
 void ResetPPI();
 void WriteRAM(word A, byte Value);
 byte ChangeDiskWithFormat(byte N, const char* FileName, int Format);

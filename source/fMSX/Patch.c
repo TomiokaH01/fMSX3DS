@@ -806,6 +806,7 @@ case 0xDB:  /* Touchpad and Light pen */
     }
     return;
 
+
 #ifdef HDD_NEXTOR
   /* NEXTOR BIOS Routine */
   /* https://www.konamiman.com/msx/msx-e.html#nextor */

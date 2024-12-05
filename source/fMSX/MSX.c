@@ -6528,7 +6528,29 @@ void ResetPPI()
 }
 
 
-static byte* ResizeMemory(byte * Buf, int Size)
+#ifdef _3DS
+byte* ResizeMemory(byte* Buf, int Size)
+{
+    byte* P;
+    if (Buf != NULL)
+    {
+        linearFree(Buf);
+        P = (byte*)linearAlloc(Size);
+        if (P == NULL)
+        {
+            linearFree(Buf);
+            P = (byte*)linearAlloc(Size);
+        }
+    }
+    else
+    {
+        P = (byte*)linearAlloc(Size);
+    }
+    return(P);
+}
+#else
+//static byte* ResizeMemory(byte * Buf, int Size)
+byte* ResizeMemory(byte* Buf, int Size)
 {
     byte* P;
     if (Buf != NULL)
@@ -6551,6 +6573,7 @@ static byte* ResizeMemory(byte * Buf, int Size)
     //}
     return(P);
 }
+#endif // _3DS
 
 
 byte ReadRAM(word A)
