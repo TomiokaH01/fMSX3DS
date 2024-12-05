@@ -264,63 +264,49 @@ int LoadFDI(FDIDisk *D,const char *FileName,int Format)
 
   /* Open file and find its size */
 #ifdef _3DS
-  if (!(F = zipfopen(FileName, "rb"))) return(0);
+  if (!(F = zipfopen(FileName, "rb")))
+  {
+      if(!IsHardDisk)return(0);
+  }
 #else
   if(!(F=fopen(FileName,"rb"))) return(0);
 #endif // _3DS
 #ifdef _3DS
-  int C2;
-  if (!fseek(F, 0, SEEK_END)) J = ftell(F);
-  else
+  if (F)
   {
-      for (J = 0; (C2 = fread(Buf, 1, 0x4000, F)) == 0x4000; J += C2);
-      if (C2 > 0) J += C2;
-}
+	  int C2;
+	  if (!fseek(F, 0, SEEK_END)) J = ftell(F);
+	  else
+	  {
+		  for (J = 0; (C2 = fread(Buf, 1, 0x4000, F)) == 0x4000; J += C2);
+		  if (C2 > 0) J += C2;
+	  }
+  }
 #ifdef HDD_NEXTOR
+  if (IsHardDisk)return 0;
   /* If too big size, treat as hard disk image. */
-  if ((J >= 2994168) || (IsHardDisk))
+  //if (J >= 2994168)
+  if (J >= 1000000)
   {
-      if (HDD[0].Data != NULL)
-      {
-          P = (byte*)realloc(HDD[0].Data, J);
-          if (P == NULL)
-          {
-              free(HDD[0].Data);
-              P = (byte*)malloc(J);
-          }
-      }
-      else
-      {
-          P = (byte*)malloc(J);
-      }
-      //HDD[0].Data = P;
-
-      //EjectFDI(&HDD[0]);
-      //P = (byte*)malloc(J);
-      if (!P)
-      {
-          //fclose(F);
-          //HDDSize = 0;
-          //IsHardDisk = 0;
-          //return(0);
-
-          /* If cann't get memory, directly read files. */
-          if (!(F = freopen(FileName, "rb+", F))) { IsHardDisk = 0; return(0); }
-
-          fclose(HDDStream);
-          HDDStream = F;
-          IsHardDisk = 1;
-          HDDSize = J;
-          return(0);
-      }
-      rewind(F);
-      fread(P, 1, J, F);
-      HDD[0].Data = P;
-      HDD[0].DataSize = J;
-      fclose(F);
-      IsHardDisk = 1;
-      HDDSize = J;
-      return(0);
+	  P = ResizeMemory(HDD[0].Data, J);
+	  if (P)
+	  {
+		  rewind(F);
+		  fread(P, 1, J, F);
+		  HDD[0].Data = P;
+		  HDD[0].DataSize = J;
+		  fclose(F);
+		  IsHardDisk = 1;
+		  HDDSize = J;
+		  return(0);
+	  }
+	  /* If cann't get memory, directly read files. */
+	  if (HDDStream)fclose(HDDStream);
+      if (!(F = freopen(FileName, "rb+", F))) { IsHardDisk = 0; return(0); }
+	  HDDStream = F;
+	  IsHardDisk = 1;
+	  HDDSize = J;
+	  return(0);
   }
 #endif // HDD_NEXTOR
 //#ifdef ZLIB
