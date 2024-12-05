@@ -591,9 +591,9 @@ void Init3DS()
 	//Verbose = 0x20;
 	//Verbose = 0xA0;
 	//Verbose = 0x44;
+	Verbose = 1;
 	//Verbose = 9;
 	//Verbose = 4;
-	Verbose = 1;
 #endif // DEBUG_LOG
 }
 
@@ -875,14 +875,10 @@ void BrowseROM(int slotid, int browsetype)
 						}
 						else if(IsHardDisk)
 						{
-							//AutoSaveHDD();
-							//if (ChangeHDDWithFormat(0, cfstring.c_str(), FMT_MSXDSK))
-							//{
-								HDDStr = currstr;
-								AddRecentlyList(savestr, ".DSK");
-								LoadPatchedNEXTOR(nextorPath);
-								return;
-							//}
+							HDDStr = currstr;
+							AddRecentlyList(savestr, ".DSK");
+							LoadPatchedNEXTOR(nextorPath);
+							return;
 						}
 					}
 					//else
@@ -1660,14 +1656,10 @@ void BrowseLoadRecently(int slotid, int browsetype)
 #ifdef HDD_NEXTOR
 							else if(IsHardDisk)
 							{
-								//AutoSaveHDD();
-								//if (ChangeHDDWithFormat(0, cfstring.c_str(), FMT_MSXDSK))
-								//{
-									HDDStr = currstr;
-									AddRecentlyList(savestr, ".DSK");
-									LoadPatchedNEXTOR(nextorPath);
-									return;
-								//}
+								HDDStr = currstr;
+								AddRecentlyList(savestr, ".DSK");
+								LoadPatchedNEXTOR(nextorPath);
+								return;
 							}
 #endif // HDD_NEXTOR
 
@@ -3507,10 +3499,15 @@ void systemMenu()
 			}
 			else if (selectmenu == "[Eject HardDisk]")
 			{
-				fclose(HDDStream);
+				if (HDDStream)
+				{
+					fclose(HDDStream);
+				}
 				HDDStream = 0;
 				HDDSize = 0;
-				EjectFDI(&HDD[0]);
+				//EjectFDI(&HDD[0]);
+				if (HDD[0].Data)linearFree(HDD[0].Data);
+				InitFDI(&HDD[0]);
 				HDDStr = "";
 #ifdef HDD_NEXTOR
 				LoadCart(0, 7, 0);	/* Eject Nextor Disk Driver ROM */

@@ -2931,37 +2931,174 @@ FILE* zipfopen(const char* _name, const char* _mode)
 		if (unzGetCurrentFileInfo(zipFile, &fileInfo, fileName, sizeof(fileName), NULL, 0, NULL, 0) == UNZ_OK)
 		{
 			const char* ext = GetFileExtension(fileName);
+			/* Maybe mistaken. but i test it many times and works in all of the case, so i leave it. */
+			/* Use if(std::string(ext) == ".ROM") etc. to fix. */
+			if (strcasecmp(ext, ".ROM") == 0 || strcasecmp(ext, ".DSK") == 0 || strcasecmp(ext, ".CAS") == 0 || strcasecmp(ext, ".MX1") == 0
+				|| strcasecmp(ext, ".MX2") == 0 || strcasecmp(ext, ".IPS") == 0)
+			{
+				if (i == ZipIndex || ZipIndex < 0)
+				{
+					/* Check const char* ext here because if malloc() get error it overwritten. */
+					int isDisk = 0;
+					if (std::string(ext) == ".dsk")isDisk = 1;
+					if (std::string(ext) == ".DSK")isDisk = 1;
+					unzOpenCurrentFile(zipFile);
+					int unzipsize = fileInfo.uncompressed_size;
+
+					zipBuf = ResizeMemory(zipBuf, unzipsize);
+					if (!zipBuf)
+					{
+						if (Verbose)printf("No memory for read the ZIP file.\n");
+					}
+					int err = unzReadCurrentFile(zipFile, zipBuf, unzipsize);
+					unzCloseCurrentFile(zipFile);
+					unzClose(zipFile);
+					/* If too big size, treat as hard disk image. */
+					//if ((unzipsize >= 2994168) && (isDisk))
+					if ((unzipsize >= 1000000) && (isDisk))
+					{
+						if (zipBuf)
+						{
+							HDD[0].Data = zipBuf;
+							HDD[0].DataSize = unzipsize;
+							IsHardDisk = 1;
+							HDDSize = unzipsize;
+							return 0;
+						}
+					}
+					F = fmemopen(zipBuf, unzipsize, _mode);
+					if (!F)
+					{
+						//if ((unzipsize >= 2994168) && (isDisk))
+						if ((unzipsize >= 1000000) && (isDisk))
+						{
+							IsHardDisk = 1;
+						}
+						if (Verbose)printf("Open ZIP error.Size:%d %s\n",unzipsize , _name);
+					}
+					return F;
+				}
+			}
+		}
+		if (i + 1 < globalInfo.number_entry)
+		{
+			if (unzGoToNextFile(zipFile) != UNZ_OK)
+			{
+				//unzClose(zipFile);
+				break;
+			}
+		}
+	}
+	//return NULL;
+
+	unzClose(zipFile);
+	return NULL;
+}
+
+
+FILE* zipfopenDirect(const char* _name, const char* _savepath ,const char* _mode)
+{
+	FILE* F;
+	std::string namestr = (std::string)_name;
+#ifdef LOG_ERROR
+	if (namestr.size() < 4)
+	{
+		ErrorVec.push_back(_name);
+		ErrorVec.push_back("zipname too short");
+		return NULL;
+	}
+#else
+	if (namestr.size() < 4)return NULL;
+#endif // LOG_ERROR
+	if (namestr.find_first_of("/") != 0)namestr = Get3DSPath(_name);
+	const char* fname = namestr.c_str();
+
+	const char* extname = &fname[strlen(fname) - 4];
+	if (strcasecmp(extname, ".ZIP") != 0)
+	{
+		const char* extsname = &fname[strlen(fname) - 3];
+		if (strcasecmp(extsname, ".GZ") != 0)
+		{
+			F = fopen(fname, _mode);
+			return F;
+		}
+		gzFile GZF = gzopen(fname, "rb");
+		int gsize = 0;
+		int readSize;
+		char* tempbuf;
+		tempbuf = (char*)malloc(0x4000);
+		for (;;)
+		{
+			readSize = gzread(GZF, tempbuf, 0x4000);
+			gsize += readSize;
+			if (readSize != 0x4000)break;
+		}
+		free(tempbuf);
+		char* gzbuf;
+		gzbuf = (char*)malloc(gsize);
+		gzrewind(GZF);
+		gzread(GZF, gzbuf, gsize);
+		F = fmemopen(gzbuf, gsize, _mode);
+		gzclose(GZF);
+		return F;
+	}
+	unzFile zipFile = unzOpen(fname);
+#ifdef LOG_ERROR
+	if (!zipFile)
+	{
+		ErrorVec.push_back(_name);
+		ErrorVec.push_back("ZipOpenError");
+		return NULL;
+	}
+#else
+	if (!zipFile)return NULL;
+#endif // LOG_ERROR
+
+	unz_global_info globalInfo;
+	if (unzGetGlobalInfo(zipFile, &globalInfo) != UNZ_OK)
+	{
+		unzClose(zipFile);
+		return NULL;
+	}
+	for (int i = 0; i < globalInfo.number_entry; i++)
+	{
+		char fileName[1024];
+		unz_file_info fileInfo;
+		if (unzGetCurrentFileInfo(zipFile, &fileInfo, fileName, sizeof(fileName), NULL, 0, NULL, 0) == UNZ_OK)
+		{
+			const char* ext = GetFileExtension(fileName);
 			if (strcasecmp(ext, ".ROM") == 0 || strcasecmp(ext, ".DSK") == 0 || strcasecmp(ext, ".CAS") == 0 || strcasecmp(ext, ".MX1") == 0
 				|| strcasecmp(ext, ".MX2") == 0 || strcasecmp(ext, ".IPS") == 0)
 			{
 				if (i == ZipIndex || ZipIndex < 0)
 				{
 					unzOpenCurrentFile(zipFile);
-					int unzipsize = fileInfo.uncompressed_size;
-					//char* tempbuf;
-					//tempbuf = (char*)malloc(unzipsize);
-					//int err = unzReadCurrentFile(zipFile, tempbuf, unzipsize);
-					//F = fmemopen(tempbuf, unzipsize, _mode);
 
-					/* 3DS:Use realloc() insted of malloc() to get rid of memory read error which occurs with large size of ZIP file(HardDisk Image etc). */
-					if (zipBuf != NULL)
+					int err = UNZ_OK;
+					char tempBuffer[8192];
+
+					F = fopen(_savepath, "wb");
+
+					do
 					{
-						zipBuf = (unsigned char*)realloc(zipBuf, unzipsize);
-						if (zipBuf == NULL)
+						//char tempBuffer[8192];
+						err = unzReadCurrentFile(zipFile, tempBuffer, 8192);
+						if (err < 0)
 						{
-							free(zipBuf);
-							zipBuf = (unsigned char*)malloc(unzipsize);
+							unzCloseCurrentFile(zipFile);
+							unzClose(zipFile);
+							return NULL;
 						}
-					}
-					else
-					{
-						zipBuf = (unsigned char*)malloc(unzipsize);
-					}
-					int err = unzReadCurrentFile(zipFile, zipBuf, unzipsize);
-					F = fmemopen(zipBuf, unzipsize, _mode);
+						if (err > 0)
+						{
+							fwrite(tempBuffer, err, 1, F);
+						}
+					} while (err > 0);
 
+					fclose(F);
 					unzCloseCurrentFile(zipFile);
 					unzClose(zipFile);
+					F = fopen(_savepath, _mode);
 					return F;
 				}
 			}
