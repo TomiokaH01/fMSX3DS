@@ -8417,7 +8417,7 @@ int LoadCart(const char* FileName, int Slot, int Type)
     if ((Slot == 0) || (Slot == 1))
     {
         if ((Type == MAP_KONAMI5) || (Type == MAP_SCCPLUS) || (Type == MAP_SCCPLUS_2) || (Type == MAP_ESESCC) || (Type == MAP_WingWarr)
-            || (!ROMData[Slot]))
+             || (Type == MAP_MANBOW2) || (!ROMData[Slot]))
         {
             AllowSCC[Slot] = 1;
         }
