@@ -64,6 +64,7 @@ extern unsigned char* IPSPatchBuf;
 extern unsigned char ScreenFilter;
 extern unsigned char TurboNow;
 extern int fpsval;
+extern int zipMessage;
 
 #ifdef USE_3D
 extern unsigned char OldStereo3DMode;
@@ -98,6 +99,7 @@ extern unsigned char overClockRatio;
 #endif // USE_OVERCLOCK
 
 #ifdef HDD_NEXTOR
+#define HDD_DETECT_SIZE		0x100000
 extern unsigned char IsHardDisk;
 #endif // HDD_NEXTOR
 
@@ -243,7 +245,8 @@ void StartMenu();
 void EndMenu();
 unsigned char* ResizeMemory(unsigned char* Buf, int Size);
 FILE* zipfopen(const char* _name, const char* _mode);
-FILE* zipfopenDirect(const char* _name, const char* _savepath, const char* _mode);
+FILE* zipfopenExtract(const char* _name, const char* _savepath, const char* _mode);
+FILE* gzipfopenExtract(const char* _name, const char* _savepath, const char* _mode);
 FILE* sramfopen(const char* _name, const char* _mode);
 int CalcCRC32(void* Buf, const char* filePath, int Size);
 void CheckSpecialCart(void* Buf, int Size, int Type, int Slot);

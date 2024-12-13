@@ -122,6 +122,7 @@ int IPSPatchSize = 0;
 unsigned char* IPSPatchBuf;
 unsigned char ScreenFilter;
 unsigned char TurboNow = 0;
+int zipMessage = 0;		/* 1:ZIP Out of memory. 2:GZIP Out of memory. */
 #ifdef MEMORY_CURSOR_POS
 unsigned char MemorySysMenupos = 0;
 #endif // MEMORY_CURSOR_POS
@@ -879,6 +880,34 @@ void BrowseROM(int slotid, int browsetype)
 							AddRecentlyList(savestr, ".DSK");
 							LoadPatchedNEXTOR(nextorPath);
 							return;
+						}
+						else if ((zipMessage & 0x01))	/* ZIP Out of memory */
+						{
+							if (BrowseOK("No memory for read the ZIP file directly.", "Extract the ZIP file to the SD card?"))
+							{
+								DrawMessage("Extracting the file now.", "Please Wait.", 50, 100, 1000, false);
+								if (zipfopenExtract(cfstring.c_str(), currstr.c_str(), "rb+"))
+								{
+									HDDStr = currstr;
+									AddRecentlyList(savestr, ".DSK");
+									LoadPatchedNEXTOR(nextorPath);
+									return;
+								}
+							}
+						}
+						else if ((zipMessage & 0x02))	/* GZIP Out of memory */
+						{
+							if (BrowseOK("No memory for read the GZIP file directly.", "Extract the GZIP file to the SD card?"))
+							{
+								DrawMessage("Extracting the file now.", "Please Wait.", 50, 100, 1000, false);
+								if (gzipfopenExtract(cfstring.c_str(), currstr.c_str(), "rb+"))
+								{
+									HDDStr = currstr;
+									AddRecentlyList(savestr, ".DSK");
+									LoadPatchedNEXTOR(nextorPath);
+									return;
+								}
+							}
 						}
 					}
 					//else
@@ -1660,6 +1689,34 @@ void BrowseLoadRecently(int slotid, int browsetype)
 								AddRecentlyList(savestr, ".DSK");
 								LoadPatchedNEXTOR(nextorPath);
 								return;
+							}
+							else if ((zipMessage & 0x01))	/* ZIP Out of memory */
+							{
+								if (BrowseOK("No memory for read the ZIP file directly.", "Extract the ZIP file to the SD card?"))
+								{
+									DrawMessage("Extracting the file now.", "Please Wait.", 50, 100, 1000, false);
+									if (zipfopenExtract(cfstring.c_str(), currstr.c_str(), "rb+"))
+									{
+										HDDStr = currstr;
+										AddRecentlyList(savestr, ".DSK");
+										LoadPatchedNEXTOR(nextorPath);
+										return;
+									}
+								}
+							}
+							else if((zipMessage & 0x02))	/* GZIP Out of memory */
+							{
+								if (BrowseOK("No memory for read the GZIP file directly.", "Extract the GZIP file to the SD card?"))
+								{
+									DrawMessage("Extracting the file now.", "Please Wait.", 50, 100, 1000, false);
+									if (gzipfopenExtract(cfstring.c_str(), currstr.c_str(), "rb+"))
+									{
+										HDDStr = currstr;
+										AddRecentlyList(savestr, ".DSK");
+										LoadPatchedNEXTOR(nextorPath);
+										return;
+									}
+								}
 							}
 #endif // HDD_NEXTOR
 
@@ -3506,7 +3563,11 @@ void systemMenu()
 				HDDStream = 0;
 				HDDSize = 0;
 				//EjectFDI(&HDD[0]);
+#ifdef _3DS_RESIZE_LINEAR
 				if (HDD[0].Data)linearFree(HDD[0].Data);
+#else
+				if (HDD[0].Data)free(HDD[0].Data);
+#endif // _3DS_RESIZE_LINEAR
 				InitFDI(&HDD[0]);
 				HDDStr = "";
 #ifdef HDD_NEXTOR

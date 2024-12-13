@@ -2877,6 +2877,8 @@ FILE* zipfopen(const char* _name, const char* _mode)
 	if (namestr.find_first_of("/") != 0)namestr = Get3DSPath(_name);
 	const char* fname = namestr.c_str();
 
+	zipMessage = 0;
+
 	const char* extname = &fname[strlen(fname) - 4];
 	if (strcasecmp(extname, ".ZIP") != 0)
 	{
@@ -2898,12 +2900,45 @@ FILE* zipfopen(const char* _name, const char* _mode)
 			if (readSize != 0x4000)break;
 		}
 		free(tempbuf);
-		char* gzbuf;
-		gzbuf = (char*)malloc(gsize);
+		zipBuf = ResizeMemory(zipBuf, gsize);
+		if (!zipBuf)
+		{
+			if (Verbose)printf("No memory for read the GZIP file.\n");
+			zipMessage = 2; /* GZIP Out of memory.*/
+			gzclose(GZF);
+			return NULL;
+		}
 		gzrewind(GZF);
-		gzread(GZF, gzbuf, gsize);
-		F = fmemopen(gzbuf, gsize, _mode);
+		gzread(GZF, zipBuf, gsize);
 		gzclose(GZF);
+		/* If too big size, treat as hard disk image. */
+		if (gsize >= HDD_DETECT_SIZE)
+		{
+			if (HDDStream)
+			{
+				fclose(HDDStream);
+				HDDStream = 0;
+			}
+#ifdef _3DS_RESIZE_LINEAR
+			if (HDD[0].Data)
+			{
+				linearFree(HDD[0].Data);
+				HDD[0].Data = 0;
+			}
+#else
+			if (HDD[0].Data)
+			{
+				free(HDD[0].Data);
+				HDD[0].Data = 0;
+			}
+#endif // _3DS_RESIZE_LINEAR
+			HDD[0].Data = zipBuf;
+			HDD[0].DataSize = gsize;
+			IsHardDisk = 1;
+			HDDSize = gsize;
+			return NULL;
+		}
+		F = fmemopen(zipBuf, gsize, _mode);
 		return F;
 	}
 	unzFile zipFile = unzOpen(fname);
@@ -2938,42 +2973,64 @@ FILE* zipfopen(const char* _name, const char* _mode)
 			{
 				if (i == ZipIndex || ZipIndex < 0)
 				{
+					int unzipsize = fileInfo.uncompressed_size;
 					/* Check const char* ext here because if malloc() get error it overwritten. */
 					int isDisk = 0;
+					/* If the file has '.DSK' extension and has too big size, treat as hard disk image. */
 					if (std::string(ext) == ".dsk")isDisk = 1;
 					if (std::string(ext) == ".DSK")isDisk = 1;
-					unzOpenCurrentFile(zipFile);
-					int unzipsize = fileInfo.uncompressed_size;
+					if (unzipsize < HDD_DETECT_SIZE)isDisk = 0;
 
+					if (isDisk)
+					{
+						if (HDDStream)
+						{
+							fclose(HDDStream);
+							HDDStream = 0;
+						}
+#ifdef _3DS_RESIZE_LINEAR
+						if (HDD[0].Data)
+						{
+							linearFree(HDD[0].Data);
+							HDD[0].Data = 0;
+						}
+#else
+						if (HDD[0].Data)
+						{
+							free(HDD[0].Data);
+							HDD[0].Data = 0;
+						}
+#endif // _3DS_RESIZE_LINEAR
+					}
 					zipBuf = ResizeMemory(zipBuf, unzipsize);
 					if (!zipBuf)
 					{
 						if (Verbose)printf("No memory for read the ZIP file.\n");
+						zipMessage = 0x01;		/* ZIP Out of memory. */
+						unzClose(zipFile);
+						return NULL;
 					}
+
+					unzOpenCurrentFile(zipFile);
 					int err = unzReadCurrentFile(zipFile, zipBuf, unzipsize);
 					unzCloseCurrentFile(zipFile);
 					unzClose(zipFile);
-					/* If too big size, treat as hard disk image. */
-					//if ((unzipsize >= 2994168) && (isDisk))
-					if ((unzipsize >= 1000000) && (isDisk))
+					if (isDisk)
 					{
-						if (zipBuf)
-						{
-							HDD[0].Data = zipBuf;
-							HDD[0].DataSize = unzipsize;
-							IsHardDisk = 1;
-							HDDSize = unzipsize;
-							return 0;
-						}
+						HDD[0].Data = zipBuf;
+						HDD[0].DataSize = unzipsize;
+						IsHardDisk = 1;
+						HDDSize = unzipsize;
+						return NULL;
 					}
 					F = fmemopen(zipBuf, unzipsize, _mode);
 					if (!F)
 					{
-						//if ((unzipsize >= 2994168) && (isDisk))
-						if ((unzipsize >= 1000000) && (isDisk))
-						{
-							IsHardDisk = 1;
-						}
+#ifdef _3DS_RESIZE_LINEAR
+						linearFree(zipBuf);
+#else
+						free(zipBuf);
+#endif // _3DS_RESIZE_LINEAR
 						if (Verbose)printf("Open ZIP error.Size:%d %s\n",unzipsize , _name);
 					}
 					return F;
@@ -2996,7 +3053,7 @@ FILE* zipfopen(const char* _name, const char* _mode)
 }
 
 
-FILE* zipfopenDirect(const char* _name, const char* _savepath ,const char* _mode)
+FILE* zipfopenExtract(const char* _name, const char* _savepath ,const char* _mode)
 {
 	FILE* F;
 	std::string namestr = (std::string)_name;
@@ -3014,35 +3071,9 @@ FILE* zipfopenDirect(const char* _name, const char* _savepath ,const char* _mode
 	const char* fname = namestr.c_str();
 
 	const char* extname = &fname[strlen(fname) - 4];
-	if (strcasecmp(extname, ".ZIP") != 0)
-	{
-		const char* extsname = &fname[strlen(fname) - 3];
-		if (strcasecmp(extsname, ".GZ") != 0)
-		{
-			F = fopen(fname, _mode);
-			return F;
-		}
-		gzFile GZF = gzopen(fname, "rb");
-		int gsize = 0;
-		int readSize;
-		char* tempbuf;
-		tempbuf = (char*)malloc(0x4000);
-		for (;;)
-		{
-			readSize = gzread(GZF, tempbuf, 0x4000);
-			gsize += readSize;
-			if (readSize != 0x4000)break;
-		}
-		free(tempbuf);
-		char* gzbuf;
-		gzbuf = (char*)malloc(gsize);
-		gzrewind(GZF);
-		gzread(GZF, gzbuf, gsize);
-		F = fmemopen(gzbuf, gsize, _mode);
-		gzclose(GZF);
-		return F;
-	}
+	if (strcasecmp(extname, ".ZIP") != 0)return NULL;
 	unzFile zipFile = unzOpen(fname);
+	zipMessage = 0;
 #ifdef LOG_ERROR
 	if (!zipFile)
 	{
@@ -3072,33 +3103,54 @@ FILE* zipfopenDirect(const char* _name, const char* _savepath ,const char* _mode
 			{
 				if (i == ZipIndex || ZipIndex < 0)
 				{
+					int isDisk = 0;
+					if (std::string(ext) == ".dsk")isDisk = 1;
+					if (std::string(ext) == ".DSK")isDisk = 1;
+
 					unzOpenCurrentFile(zipFile);
 
+					int unzipsize = fileInfo.uncompressed_size;
 					int err = UNZ_OK;
-					char tempBuffer[8192];
 
+					int zipbufsize = unzipsize > 0x200000 ? 0x200000 : unzipsize;
+					zipBuf = ResizeMemory(zipBuf, zipbufsize);
+					if (!zipBuf)
+					{
+						unzClose(zipFile);
+						zipMessage = 0x01;	/* ZIP Out of memory. */
+						return NULL;
+					}
 					F = fopen(_savepath, "wb");
-
 					do
 					{
-						//char tempBuffer[8192];
-						err = unzReadCurrentFile(zipFile, tempBuffer, 8192);
+						err = unzReadCurrentFile(zipFile, zipBuf, zipbufsize);
 						if (err < 0)
 						{
 							unzCloseCurrentFile(zipFile);
 							unzClose(zipFile);
+							fclose(F);
+							linearFree(zipBuf);
 							return NULL;
 						}
 						if (err > 0)
 						{
-							fwrite(tempBuffer, err, 1, F);
+							fwrite(zipBuf, err, 1, F);
 						}
 					} while (err > 0);
+					linearFree(zipBuf);
 
-					fclose(F);
+					//fclose(F);
 					unzCloseCurrentFile(zipFile);
 					unzClose(zipFile);
-					F = fopen(_savepath, _mode);
+					F = freopen(_savepath, _mode, F);
+
+					if ((isDisk) && (unzipsize >= HDD_DETECT_SIZE))
+					{
+						if (HDDStream)fclose(HDDStream);
+						HDDStream = F;
+						IsHardDisk = 1;
+						HDDSize = unzipsize;
+					}
 					return F;
 				}
 			}
@@ -3116,6 +3168,68 @@ FILE* zipfopenDirect(const char* _name, const char* _savepath ,const char* _mode
 
 	unzClose(zipFile);
 	return NULL;
+}
+
+
+FILE* gzipfopenExtract(const char* _name, const char* _savepath ,const char* _mode)
+{
+	FILE* F;
+	std::string namestr = (std::string)_name;
+	const char* fname = namestr.c_str();
+	const char* extsname = &fname[strlen(fname) - 3];
+	if (strcasecmp(extsname, ".GZ") != 0)
+	{
+		F = fopen(fname, _mode);
+		return F;
+	}
+	gzFile GZF = gzopen(fname, "rb");
+	int gsize = 0;
+	int readSize;
+	char* tempbuf;
+	tempbuf = (char*)malloc(0x4000);
+	for (;;)
+	{
+		readSize = gzread(GZF, tempbuf, 0x4000);
+		gsize += readSize;
+		if (readSize != 0x4000)break;
+	}
+	free(tempbuf);
+	int zipbufsize = gsize > 0x200000 ? 0x200000 : gsize;
+	zipBuf = ResizeMemory(zipBuf, zipbufsize);
+	if (!zipBuf)
+	{
+		gzclose(GZF);
+		zipMessage = 0x02;	/* GZIP Out of memory. */
+		return NULL;
+	}
+	F = fopen(_savepath, "wb");
+	int err = 0;
+	gzrewind(GZF);
+	do
+	{
+		err = gzread(GZF, zipBuf, zipbufsize);
+		if (err < 0)
+		{
+			gzclose(GZF);
+			fclose(F);
+			linearFree(zipBuf);
+		}
+		if (err > 0)
+		{
+			fwrite(zipBuf, err, 1, F);
+		}
+	} while (err > 0);
+	linearFree(zipBuf);
+	gzclose(GZF);
+	F = freopen(_savepath, _mode, F);
+	if (gsize >= HDD_DETECT_SIZE)
+	{
+		if (HDDStream)fclose(HDDStream);
+		HDDStream = F;
+		IsHardDisk = 1;
+		HDDSize = gsize;
+	}
+	return F;
 }
 
 
