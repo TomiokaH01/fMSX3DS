@@ -1666,6 +1666,11 @@ void BrowseLoadRecently(int slotid, int browsetype)
 						AutoSaveDisk(slotid);
 						AutoSaveHDD();
 						std::string currstr = getZipSaveDiskPath(cfstring, extname);
+						// Temporary fix
+						if (currstr[currstr.length() - 1] == ' ')
+						{
+							currstr.pop_back();
+						}
 						std::string savestr;
 						savestr = cfstring;
 						struct stat buf;
@@ -5699,7 +5704,9 @@ const char* GetFileExtension(std::string filestr)
 	const char char2 = filestr[retsize + 2];
 	const char char3 = filestr[retsize + 3];
 	retstr = retstr + char0 + char1 + char2 + char3;
-	return retstr.c_str();
+	//Don't use ".c_str()" because it hasn't null terminated in some case before c++11.
+	//With ".gz" compressed ".DSK" file, it makes illegal chars.
+	return StringToChar(retstr);
 }
 
 
