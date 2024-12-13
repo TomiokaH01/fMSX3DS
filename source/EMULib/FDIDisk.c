@@ -266,7 +266,12 @@ int LoadFDI(FDIDisk *D,const char *FileName,int Format)
 #ifdef _3DS
   if (!(F = zipfopen(FileName, "rb")))
   {
-      if(!IsHardDisk)return(0);
+#ifdef HDD_NEXTOR
+      if (!(IsHardDisk) || (zipMessage & 0x01) || (zipMessage & 0x02))return(0);
+      //if(!IsHardDisk)return(0);
+#else
+      return(0);
+#endif // HDD_NEXTOR
   }
 #else
   if(!(F=fopen(FileName,"rb"))) return(0);
@@ -283,11 +288,15 @@ int LoadFDI(FDIDisk *D,const char *FileName,int Format)
 	  }
   }
 #ifdef HDD_NEXTOR
-  if (IsHardDisk)return 0;
+  if (IsHardDisk)return (0);
   /* If too big size, treat as hard disk image. */
-  //if (J >= 2994168)
-  if (J >= 1000000)
+  if (J >= HDD_DETECT_SIZE)
   {
+      if (HDDStream)
+      {
+          fclose(HDDStream);
+          HDDStream = 0;
+      }
 	  P = ResizeMemory(HDD[0].Data, J);
 	  if (P)
 	  {
@@ -301,7 +310,6 @@ int LoadFDI(FDIDisk *D,const char *FileName,int Format)
 		  return(0);
 	  }
 	  /* If cann't get memory, directly read files. */
-	  if (HDDStream)fclose(HDDStream);
       if (!(F = freopen(FileName, "rb+", F))) { IsHardDisk = 0; return(0); }
 	  HDDStream = F;
 	  IsHardDisk = 1;
