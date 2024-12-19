@@ -122,7 +122,7 @@ int IPSPatchSize = 0;
 unsigned char* IPSPatchBuf;
 unsigned char ScreenFilter;
 unsigned char TurboNow = 0;
-int zipMessage = 0;		/* 1:ZIP Out of memory. 2:GZIP Out of memory. */
+int zipMessage = 0;		/* 0x01:ZIP Out of memory.  0x02:GZIP Out of memory.  0x04:Is Hard Disk Size */
 #ifdef MEMORY_CURSOR_POS
 unsigned char MemorySysMenupos = 0;
 #endif // MEMORY_CURSOR_POS
@@ -391,6 +391,8 @@ static std::vector<std::string> menuItem =
 	"[Apply IPS Patch]",
 	"[Eject Disk]",
 #if defined(HDD_NEXTOR) || defined(HDD_IDE) || defined(MEGASCSI_HD)
+	"",
+	"<Hard Disk Files>",
 	"[Load HardDisk]",
 	"[Eject HardDisk]",
 #endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
@@ -401,6 +403,7 @@ static std::vector<std::string> menuItem =
 	"[Create new SaveDATA Cassette Tape]",
 	"[Rewind Cassette Tape]",
 	"",
+	"<Actions>",
 	"[State Load]",
 	"[State Save]",
 	"[Load Screen Shot]",
@@ -421,6 +424,9 @@ static std::vector<std::string> menuItem =
 	"[OverClockR800(Unsafe)]",
 	"[Use 4MB Memory(Unsafe)]",
 	"[Cheat]",
+#ifdef DEBUGGER_3DS
+		"[Start Debugger]",
+#endif // DEBUGGER_3DS
 #ifdef DEBUG_ENABLE
 		"[Debug]",
 #endif // DEBUG_ENABLE
@@ -842,21 +848,11 @@ void BrowseROM(int slotid, int browsetype)
 				}
 				else if(strcasecmp(extname, ".DSK")==0)
 				{
-#if defined(HDD_NEXTOR) || defined(HDD_IDE) || defined(MEGASCSI_HD)
-					if (browsetype == BROWSE_HDD)
-					{
-						//if (ChangeHDDWithFormat(0, cfstring.c_str(), FMT_MSXDSK))
-						//{
-#ifdef HDD_NEXTOR
-							LoadPatchedNEXTOR(nextorPath);
-#endif // HDD_NEXTOR
-							return;
-						//}
-						//return;
-					}
-#endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
 					AutoSaveDisk(slotid);
+#if defined(HDD_NEXTOR) || defined(HDD_IDE) || defined(MEGASCSI_HD)
 					AutoSaveHDD();
+					if (browsetype == BROWSE_HDD)IsHardDisk = 1;
+#endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
 					std::string currstr = getZipSaveDiskPath(cfstring, extname);
 					std::string savestr;
 					savestr = cfstring;
@@ -874,6 +870,7 @@ void BrowseROM(int slotid, int browsetype)
 							AddRecentlyList(savestr, ".DSK");
 							//AddRecentlyList(cfstring, ".DSK");
 						}
+#ifdef HDD_NEXTOR
 						else if(IsHardDisk)
 						{
 							HDDStr = currstr;
@@ -881,7 +878,7 @@ void BrowseROM(int slotid, int browsetype)
 							LoadPatchedNEXTOR(nextorPath);
 							return;
 						}
-						else if ((zipMessage & 0x01))	/* ZIP Out of memory */
+						else if ((zipMessage & (0x01 | 0x04)))	/* 0x01:ZIP Out of memory  0x04:Is Hard Disk Size */
 						{
 							if (BrowseOK("No memory for read the ZIP file directly.", "Extract the ZIP file to the SD card?"))
 							{
@@ -895,7 +892,7 @@ void BrowseROM(int slotid, int browsetype)
 								}
 							}
 						}
-						else if ((zipMessage & 0x02))	/* GZIP Out of memory */
+						else if ((zipMessage & (0x02 | 0x04)))	/* 0x02:GZIP Out of memory  0x04:Is Hard Disk Size */
 						{
 							if (BrowseOK("No memory for read the GZIP file directly.", "Extract the GZIP file to the SD card?"))
 							{
@@ -909,6 +906,7 @@ void BrowseROM(int slotid, int browsetype)
 								}
 							}
 						}
+#endif // HDD_NEXTOR
 					}
 					//else
 					//{
@@ -1666,11 +1664,6 @@ void BrowseLoadRecently(int slotid, int browsetype)
 						AutoSaveDisk(slotid);
 						AutoSaveHDD();
 						std::string currstr = getZipSaveDiskPath(cfstring, extname);
-						// Temporary fix
-						if (currstr[currstr.length() - 1] == ' ')
-						{
-							currstr.pop_back();
-						}
 						std::string savestr;
 						savestr = cfstring;
 						struct stat buf;
@@ -1695,7 +1688,7 @@ void BrowseLoadRecently(int slotid, int browsetype)
 								LoadPatchedNEXTOR(nextorPath);
 								return;
 							}
-							else if ((zipMessage & 0x01))	/* ZIP Out of memory */
+							else if ((zipMessage & (0x01 | 0x04)))	/* 0x01:ZIP Out of memory  0x04:Is Hard Disk Size */
 							{
 								if (BrowseOK("No memory for read the ZIP file directly.", "Extract the ZIP file to the SD card?"))
 								{
@@ -1709,7 +1702,7 @@ void BrowseLoadRecently(int slotid, int browsetype)
 									}
 								}
 							}
-							else if((zipMessage & 0x02))	/* GZIP Out of memory */
+							else if((zipMessage & (0x02 | 0x04)))	/* 0x02:GZIP Out of memory  0x04:Is Hard Disk Size */
 							{
 								if (BrowseOK("No memory for read the GZIP file directly.", "Extract the GZIP file to the SD card?"))
 								{
@@ -1742,7 +1735,7 @@ void BrowseLoadRecently(int slotid, int browsetype)
 						if (CASStr != cfstring || zipfileStr.length() > 0)
 						{
 #ifdef TURBO_R
-							if (MODEL(MSX_MSXTR))ShowMessage3DS("MSXTurboR doesn't support cassette tapes.", "Chnage MSX Hardware Model and try again.");
+							if (MODEL(MSX_MSXTR))ShowMessage3DS("MSXTurboR doesn't support cassette tapes.", "Change MSX Hardware Model and try again.");
 #endif // TURBO_R
 							if (ChangeTape(cfstring.c_str()))
 							{
@@ -1756,7 +1749,7 @@ void BrowseLoadRecently(int slotid, int browsetype)
 				}
 				if (NotFound)
 				{
-					if (BrowseOK("File no found.", "Do you want to delete this from the list?") == true)
+					if (BrowseOK("File not found.", "Do you want to delete this from the list?") == true)
 					{
 						RemoveRecentlyList(cfstring);
 						latestPath = "";
@@ -3555,12 +3548,13 @@ void systemMenu()
 #if defined(HDD_NEXTOR) || defined(HDD_IDE) || defined(MEGASCSI_HD)
 			else if (selectmenu == "[Load HardDisk]")
 			{
+				AutoSaveHDD();
 				BrowseROM(0, BROWSE_HDD);
 				return;
-				//LoadPatchedNEXTOR();
 			}
 			else if (selectmenu == "[Eject HardDisk]")
 			{
+				AutoSaveHDD();
 				if (HDDStream)
 				{
 					fclose(HDDStream);
@@ -3871,7 +3865,12 @@ void systemMenu()
 #endif // USE_OVERCLOCK
 			else if (selectmenu == "[Use 4MB Memory(Unsafe)]")
 			{
-			if (BrowseOK("Chnage memory size to 4MB(Unsafe)?", NULL))NewRAMSize = 6;
+				if (BrowseOK("Change memory size to 4MB(Unsafe)?", NULL))
+				{
+					DrawMessage("Memory size will change after you reset MSX.", "",10, 50, 1000, true);
+					NewRAMSize = 6;
+					return;
+				}
 			}
 			else if (selectmenu == "[Fast Forward]")
 			{
@@ -3958,6 +3957,15 @@ void systemMenu()
 					return;
 				}
 			}
+#ifdef DEBUGGER_3DS
+			if (selectmenu == "[Start Debugger]")
+			{
+				StartMenu();
+				DebuggerBottomScreen();
+				EndMenu();
+				return;
+			}
+#endif // DEBUGGER_3DS
 #ifdef DEBUG_ENABLE
 			else if(selectmenu== "[Debug]")
 			{
@@ -4122,9 +4130,6 @@ void DebugMenu()
 	std::vector<std::string> debugmenuItem =
 	{
 		"[Back]",
-#ifdef DEBUGGER_3DS
-		"[StepOver Z80(R800)]",
-#endif // DEBUGGER_3DS
 		"[Show VDP Register]",
 #ifdef VDP_V9990
 		"[Show V9990 VDP Rgister]",
@@ -4251,23 +4256,6 @@ void DebugMenu()
 				SDL_Delay(TextDelay);
 				break;
 			}
-#ifdef DEBUGGER_3DS
-			if (selectmenu == "[StepOver Z80(R800)]")
-			{
-				DebuggerBottomScreen();
-				return;
-
-				//gfxInitDefault();
-				//consoleInit(GFX_BOTTOM, _NULL);
-				//IsInConsole = true;
-				//char debugchr[128];
-				//DAsm(debugchr, CPU.PC.W);
-				//printf(debugchr); printf("\n");
-				//ExitConsole();
-				//break;
-			}
-#endif // DEBUGGER_3DS
-
 			else if (selectmenu == "[Show Disk Info]")
 			{
 				gfxInitDefault();
@@ -5034,7 +5022,7 @@ void AdjustReferenceImageImpose(void)
 			C2D_SceneBegin(BottomRenderTartget);
 			DrawTextTranslate("Use pad to move reference image.", textSize, textSize, 1, fontSize, fontSize, Color_White);
 			DrawTextTranslate("Use L or R key to change scale.", textSize, textSize * 2, 1, fontSize, fontSize, Color_White);
-			DrawTextTranslate("Use X or Y key to chnage transparent.", textSize, textSize * 3, 1, fontSize, fontSize, Color_White);
+			DrawTextTranslate("Use X or Y key to change transparent.", textSize, textSize * 3, 1, fontSize, fontSize, Color_White);
 			DrawTextTranslate("Press B or start to exit.", textSize, textSize * 4, 1, fontSize, fontSize, Color_White);
 			needRedraw = false;
 			C3D_FrameEnd(0);
@@ -5766,12 +5754,12 @@ void DebuggerBottomScreen()
 	CharVec.clear();
 	char debugchr[128];
 	char addrchr[16];
-	//std::ostringstream oss;
 	int selectIndex = 0;
 	int startid = 0;
 	int sumpc = 0;
 	int breakPointAddr = -1;
 	int breakPointHL = -1;
+	int isInMenu = 0;
 	std::vector<std::vector<std::unordered_set<word>>> debugVecVec;
 	for (int i = 0; i < 4; i++)
 	{
@@ -5783,7 +5771,6 @@ void DebuggerBottomScreen()
 		}
 		debugVecVec.push_back(debugVec);
 	}
-	//std::unordered_set<word> debugInfoSet;
 	while (aptMainLoop())
 	{
 		if (needRedraw == true)
@@ -5805,13 +5792,6 @@ void DebuggerBottomScreen()
 					DrawText(CharVec[i], textStartPos + textSmallSize*8, textSmallSize * (float)idx0, 1.0f, fontSmallSize, fontSmallSize, Color_White);
 				}
 			}
-
-			//std::string regstr = "";
-			//std::ostringstream oss0;
-			//oss0 << std::hex << CPU.AF.W;
-			//regstr = "AF:" + oss0.str();
-			//DrawTextTranslate(StringToChar(regstr)
-			//	, textStartPos, textSmallSize, 1.0f, fontSmallSize, fontSmallSize, Color_White);
 
 			std::string regstrs[13] = { "AF :", "BC :", "DE :", "HL :", "AF':", "BC':", "DE':", "HL':", "SP :", "PC :", "", "PSlot:", "SSlot:" };
 			int regsvals[13] = {CPU.AF.W, CPU.BC.W, CPU.DE.W, CPU.HL.W, CPU.AF1.W, CPU.BC1.W, CPU.DE1.W, CPU.HL1.W, CPU.SP.W, CPU.PC.W, 0,
@@ -5842,8 +5822,9 @@ void DebuggerBottomScreen()
 				DrawText(StringToChar(regstr)
 					, textStartPos, textSmallSize*i, 1.0f, fontSmallSize, fontSmallSize, Color_White);
 			}
+			DrawOKButton("StepIn(A)");
+			DrawCancelButton("Back(B)");
 
-			DrawCancelButton("Back");
 			int textNum = 240 / textSmallSize - 2;
 			needRedraw = false;
 			C3D_FrameEnd(0);
@@ -5853,7 +5834,7 @@ void DebuggerBottomScreen()
 		unsigned int debuggerAction = 0;		/* 1:StepOver  2:RunTrace */
 		u32 kDown = hidKeysDown();
 		u32 kHeld = hidKeysHeld();
-		if (kDown & KEY_START)
+		if ((kDown & KEY_START) || (isInMenu))
 		{
 			//bool isExitDebugger = BrowseDebuggerMenu();
 			//if (isExitDebugger)break;
@@ -5862,7 +5843,7 @@ void DebuggerBottomScreen()
 			std::vector<char*> menuvec;
 			menuvec.clear();
 			menuvec.push_back("[Back]");
-			menuvec.push_back("[Step Over]");
+			menuvec.push_back("[Step In]");
 			menuvec.push_back("[Run Trace]");
 			menuvec.push_back("[Set BreakPoint]");
 			menuvec.push_back("[Set Break HL value]");
@@ -5873,7 +5854,7 @@ void DebuggerBottomScreen()
 			std::string selectmenu = menuvec[menuid];
 			needRedraw = true;
 			if (selectmenu == "[Exit Debugger]")break;
-			else if( selectmenu == "[Step Over]")
+			else if( selectmenu == "[Step In]")
 			{
 				debuggerAction = 0x01;
 			}
@@ -5903,39 +5884,38 @@ void DebuggerBottomScreen()
 				//val = strtol(kbdchar, NULL, 16);
 				//DisplayMemory(val);
 			}
-
-			//switch (menuid)
-			//{
-			//case 0:		/* "[Back]" */
-			//	break;
-			//case 1:		/* "[Set BreakPoint]" */
-			//	break;
-			//case 2:		/* "[Display Memory]" */
-			//	break;
-			//case 3:		/* "[Exit Debugger]" */
-			//	return;
-			//default:
-			//	break;
-			//}
-			//needRedraw = true;
+			isInMenu = 0;
 		}
 
 		if (!debuggerAction)
 		{
-			if (kDown & KEY_A)debuggerAction = 0x01;
-			else if(kDown & KEY_Y)debuggerAction = 0x02;
+			if (kDown & KEY_A)debuggerAction = 1;
+			else if (kDown & KEY_B)isInMenu = 1;
+			else if(kDown & KEY_Y)debuggerAction = 2;
+
+			hidTouchRead(&tp);
+			int px = tp.px;
+			int py = tp.py;
+			if (kDown & KEY_TOUCH)
+			{
+				kDown &= ~KEY_TOUCH;
+				if (CheckCancelButton(px, py))isInMenu = 1;
+				if (CheckOKButton(px, py))debuggerAction = 1;
+			}
 		}
 		if (debuggerAction)
 		{
 			CharVec.clear();
 			sumpc = 0;
 			std::unordered_set<word> currDebugSet = debugVecVec[PSLReg & 0x03][SSLReg[PSLReg & 0x03] & 0x03];
-			for (int i = CPU.PC.W-8; i < CPU.PC.W; i++)
+			//for (int i = CPU.PC.W-8; i < CPU.PC.W; i++)
+			for (int i = CPU.PC.W - 128; i < CPU.PC.W; i++)
 			{
 				if (!currDebugSet.count(i))continue;
 				std::ostringstream oss;
 				oss << std::hex << i;
-				DAsm(debugchr, i);
+				int dasmed = DAsm(debugchr, i);
+				currDebugSet.insert(dasmed + i);
 				std::string tempstr = "";
 				switch (oss.str().size())
 				{
@@ -5969,7 +5949,8 @@ void DebuggerBottomScreen()
 			}
 			selectIndex = CharVec.size();
 			startid = std::max(0, (int)CharVec.size() - 2);
-			for (int i = 0; i < 6; i++)
+			//for (int i = 0; i < 6; i++)
+			for (int i = 0; i < 64; i++)
 			{
 				int dasmnum = DAsm(debugchr, CPU.PC.W + sumpc);
 				currDebugSet.insert(CPU.PC.W + sumpc);
@@ -5999,53 +5980,43 @@ void DebuggerBottomScreen()
 			needRedraw = true;
 			if (debuggerAction==1)
 			{
-				StepOverZ80(&CPU);
+				StepInZ80(&CPU);
 			}
 			else if(debuggerAction==2)
 			{
+				C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+				C2D_TargetClear(BottomRenderTartget, Color_Screen);
+				C2D_SceneBegin(BottomRenderTartget);
+				DrawCancelButton("Back(B)");
+				C3D_FrameEnd(0);
+				needRedraw = true;
 				while (aptMainLoop())
 				{
-					StepOverZ80(&CPU);
+					hidScanInput();
+					u32 kDown = hidKeysDown();
+					if (kDown & KEY_B)break;
+
+					hidTouchRead(&tp);
+					int px = tp.px;
+					int py = tp.py;
+					if (kDown & KEY_TOUCH)
+					{
+						kDown &= ~KEY_TOUCH;
+						if (CheckCancelButton(px, py))break;
+					}
+
+					StepInZ80(&CPU);
 					if (CPU.PC.W == breakPointAddr)break;
 					if (CPU.HL.W == breakPointHL)break;
 					BrowseHomeButton();
 					if (ExitNow == 1)return;
 				}
 			}
-
-			//selectIndex = std::max(0, (int)CharVec.size() - 1);
-			//startid = std::max(0, selectIndex - 5);
-			//DAsm(debugchr, CPU.PC.W);
-			//std::ostringstream oss;
-			//oss << std::hex << CPU.PC.W;
-
-			////std::string tempstr = std::to_string(CPU.PC.W) + ": " + debugchr;
-			////std::string tempstr = oss.str() + (std::string)": " +(std::string)debugchr;
-			////if (oss.str().size() < 4)tempstr = (std::string)"0" + tempstr;
-			//std::string tempstr = "";
-			//switch (oss.str().size())
-			//{
-			//	case 1:
-			//		tempstr = (std::string)"000" + oss.str() + (std::string)": " + (std::string)debugchr;
-			//		break;
-			//	case 2:
-			//		tempstr = (std::string)"00" + oss.str() + (std::string)": " + (std::string)debugchr;
-			//		break;
-			//	case 3:
-			//		tempstr = (std::string)"0" + oss.str() + (std::string)": " + (std::string)debugchr;
-			//		break;
-			//	default:
-			//		tempstr = oss.str() + (std::string)": " + (std::string)debugchr;
-			//		break;
-			//}
-			//std::transform(tempstr.begin(), tempstr.end(), tempstr.begin(), [](char c) {return std::toupper(c); });
-			//CharVec.push_back(StringToChar(tempstr.c_str()));
-			//needRedraw = true;
-			//StepOverZ80(&CPU);
 		}
 		else if (kDown & KEY_B)
 		{
-			break;
+			//break;
+			isInMenu = 1;
 		}
 		else if (kHeld & KEY_UP)
 		{
@@ -6223,20 +6194,5 @@ bool BrowseDebuggerMenu()
 		val = strtol(kbdchar, NULL, 16);
 	}
 	return false;
-
-	//std::vector<std::string> debugmenuItem =
-	//{
-	//	"[Back]",
-	//	"[Set BreakPoint]",
-	//	"[Display Memory]",
-	//	"[Exit Debugger]",
-	//	""
-	//};
-	//textbuf = C2D_TextBufNew(4096);
-	//bool needRedraw = true;
-	//int menuItemCount = debugmenuItem.size();
-	//int selectIndex = 0;
-	//int startid = 0;
-	//bool IsInConsole = false;
 }
 #endif // DEBUGGER_3DS

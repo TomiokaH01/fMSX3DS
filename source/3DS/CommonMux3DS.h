@@ -256,6 +256,7 @@ int SetScreenDepth(int Depth)
     return(Depth);
 }
 
+
 #ifdef VDP_V9990
 static int V9KFirstLine = 0;
 

@@ -2889,6 +2889,7 @@ FILE* zipfopen(const char* _name, const char* _mode)
 			return F;
 		}
 		gzFile GZF = gzopen(fname, "rb");
+		if (!GZF)return NULL;
 		int gsize = 0;
 		int readSize;
 		char* tempbuf;
@@ -2904,7 +2905,8 @@ FILE* zipfopen(const char* _name, const char* _mode)
 		if (!zipBuf)
 		{
 			if (Verbose)printf("No memory for read the GZIP file.\n");
-			zipMessage = 2; /* GZIP Out of memory.*/
+			zipMessage = 0x02;	/* 0x02: GZIP Out of memory. */
+			if (gsize >= HDD_DETECT_SIZE)zipMessage |= 0x04;	/* 0x04:Is Hard Disk Size */
 			gzclose(GZF);
 			return NULL;
 		}
@@ -3006,7 +3008,8 @@ FILE* zipfopen(const char* _name, const char* _mode)
 					if (!zipBuf)
 					{
 						if (Verbose)printf("No memory for read the ZIP file.\n");
-						zipMessage = 0x01;		/* ZIP Out of memory. */
+						zipMessage = 0x01;		/* 0x01: ZIP Out of memory. */
+						if (unzipsize >= HDD_DETECT_SIZE)zipMessage |= 0x04;	/* 0x04:Is Hard Disk Size */
 						unzClose(zipFile);
 						return NULL;
 					}
