@@ -841,7 +841,7 @@ word RunZ80(Z80 *R)
 
 /* Execute Z80 1step. For Debugger. */
 #ifdef DEBUGGER_3DS
-void StepOverZ80(Z80* R)
+void StepInZ80(Z80* R)
 {
     register byte I;
     register pair J;
