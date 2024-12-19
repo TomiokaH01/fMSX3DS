@@ -86,7 +86,7 @@ http://www.yo.rim.or.jp/~anaka/AtoC/labo/labo32.htm
 
 ・プレイする
  fMSX3DSを起動すると、ファイル選択ダイアログが表示されます。
-ここで、ROMカートリッジのイメージファイルや、ディスクイメージファイル、カセットテープのファイル
+ここで、ROMカートリッジのイメージファイルや、ディスクイメージファイル、ハードディスクのイメージファイル、カセットテープのファイル
 を読み込めます。
 fMSX3DSは以下の拡張子のファイルに対応しています。
 「.ROM」、「.MX1」、「.MX2」、「.DSK」、「.CAS」
@@ -230,5 +230,6 @@ fMSX : MSX computer emulator
   3DS port			 by h.tomioka(2023-2024)
 
   C-BIOS			 by BouKiCHi and many people(2002-2018)
+  NEXTOR			 by Konamiman(2011-2023)
   Pseudo Kanji ROM		 by Ａ ｔｏ Ｃ(1997)
   要町 as MSX-View（フォント）	 by Ａ ｔｏ Ｃ(1997)

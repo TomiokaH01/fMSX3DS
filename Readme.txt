@@ -82,7 +82,7 @@ fMSX3DS creates these folders.
 
 <5:Play>
 When you start fMSX3DS, it show select file dialog.
-You can select ROM cartridge, Disk image, Cassette Tape etc.
+You can select ROM cartridge, Disk image, Hard Disk Image, Cassette Tape etc.
 fMSX3DS supports files with extension ".ROM", ".MX1", ".MX2", ".DSK", ".CAS".
 Also, It supports ".ZIP" or ".gz" compressed files.
 
@@ -219,5 +219,6 @@ fMSX : MSX computer emulator
   3DS port			 by h.tomioka(2023-2024)
 
   C-BIOS			 by BouKiCHi and many people(2002-2018)
+  NEXTOR			 by Konamiman(2011-2023)	
   Pseudo Kanji ROM		 by Ａ ｔｏ Ｃ(1997)
   Kaname-Mati as MSX-View(font)  by Ａ ｔｏ Ｃ(1997)

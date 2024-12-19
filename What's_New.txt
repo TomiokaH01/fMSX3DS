@@ -1,3 +1,76 @@
+v1.42
+-Add support for Hard Disk drive. It uses NEXTOR driver. Thanks for Konamiman, the auther of NEXTOR,
+ With that, you can use the hardDisk image with simply opening ".DSK" disk image files.
+To manage HDD image, use DiskExplorer.
+https://hp.vector.co.jp/authors/VA013937/editdisk/index_e.html
+
+-Added debugger with dual screen of 3DS.
+ You can use it with choosing "<Unsafe Actions>/[Start Debugger]" item in the fMSX3DS system menu.
+ Then press A button to step over, B button to debugger menu.
+
+-Fied bug that SCC sounds missing in MANBOW2.
+
+-Fixed bug that fMSX3DS makes a undeletable(with Windows) file in "/FMSX3DS/SAVEDISK" folder in some case when you use ".gz" compressed disk files.
+ Sorry, if you troubled with this. If so, you can delete that file with FBI.
+ https://github.com/Steveice10/FBI
+
+-Add support for 4MB RAM mapper(unsafe). But, it's unsafe to use that, because same as real MSX machine with 4MB RAM, some games and applications do'nt work.
+
+-Fixed bug that MSX0's "IOTGET" command with "host/heap" node shows invalid values.
+
+-Fixed bug that some disks with special header does'nt work(MSX-Fun Info-Disk etc).
+
+-Add support for special disks with 81 Tracks.(Dummieland etc).
+
+-Add support for new MEGAROM mapper for HolyQuran by Al Alamiah.
+
+-Add support for The Curse Of Lies(MSXdev 2024).
+
+-Small GUI improve.
+
+-Small speed up with latest version of devkitpro.
+
+-Fix Compile Error with latest version of devkitpro.
+
+v1.41
+-Add support for Dual Screen for V9990!(Codename INTRUDER, 2 Screen Demo by N.I etc).
+ To use this, select "[V9990 Dual Screen]" item in the fMSX3DS system menu, and select "On".
+
+-Update "emu2149.c" by Mitsutaka Okazaki to latest version(v1.42).
+
+-Add support for LED light analog output for MSX0.
+ To use this, Choose "[Option]" item in the fMSX3DS system menu, and change option item "<MSX0 Option>/Use MSX0" to "On",
+ and "<MSX0 Option>/MSX Analog Output" to "LED(3DS PowerLED)".
+ Caution! it use Nintendo3DS's real LED. Your 3DS is not breakdown while LED blinking.
+
+-Add support for overlay for reference image.
+ It's usefull for MSX graphic apps such as Graph Saurus etc. and MSX sprite editor app such as S.S.T etc.
+ To use this,  Choose "[Load Reference Image](Overlay)" item in the fMSX3DS system menu, and select reference image file.
+ And choose "[Adjust Reference Image]" item in the fMSX3DS system menu to enter adjust reference image menu.
+ In this menu, you can change reference image's position, size, and transparent rate with Nintendo3DS's keys.
+ PAD:adjust position  LR key:change size of reference image  XY key:change transparent rate
+
+-Fixed bug that some disk games does'nt work on MSXTurboR(Breaker(JAST) etc).  
+ 
+-Add support for TC8566AF FDC emulation for MSXTurboR.
+ With this more games/apps become works correct(ksaver.com etc).
+
+-Fix bug that boot with ctrl key does'nt work on MSXTurboR(Many KOEI game of disk version(Ishin no Arashi , Sangokushi, Sangokushi2 etc) etc).
+
+-Improve emulation of MSXTurboR Pause. (Networkers Gift Disk etc). 
+
+-Fix graphic glitches of Screen mode 10 (Intro of Shin kugyoku den etc).
+
+-Fixed bug that fMSX3DS get's error when you power off Nintendo 3DS while displaying "[Frequently Used Folder]" system menu.
+
+-Add support for ".der" copy protected disk files made by Disk-Manager.
+ http://www.lexlechz.at/en/software/DiskMgr.html
+
+-Add support for ESE-RAM.
+ https://www.msx.org/wiki/ESE-RAM
+ http://www.hat.hi-ho.ne.jp/tujikawa/ese/eseram.html
+ you can use it with selecting menu item "[Load Ese RAM 512k ROM]" in the fMSX3DS's system menu. 
+
 v1.4
 -Add support for V9990 and its clones(GFX9000 etc).
  You can use it with chose "[Option]" item in the fMSX3DS system menu, and enable the "Use V9990" option item.
@@ -12,7 +85,7 @@ v1.4
 
 -Update "emu8950.c" by Mitsutaka Okazaki to latest version.
 
--Add support fr new firmware(0.07.08) for MSX0.
+-Add support for new firmware(0.07.08) for MSX0.
 
 -Add support for ASCII16 ROM Mapper with 4MB size(9Finger Demo by NOP, MSX in a Row!, MSX-Wings etc).
 
