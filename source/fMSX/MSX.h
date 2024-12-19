@@ -30,7 +30,6 @@
 
 #include "3DSConfig.h"
 #include "FDC_TC8566AF.h"
-#include "MegaSCSI.h"
 
 /** INLINE ***************************************************/
 /** C99 standard has "inline", but older compilers've used  **/
