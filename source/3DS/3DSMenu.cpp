@@ -598,8 +598,7 @@ void Init3DS()
 	//Verbose = 0x20;
 	//Verbose = 0xA0;
 	//Verbose = 0x44;
-	Verbose = 1;
-	//Verbose = 9;
+	Verbose = 9;
 	//Verbose = 4;
 #endif // DEBUG_LOG
 }
@@ -5759,7 +5758,7 @@ void DebuggerBottomScreen()
 	int sumpc = 0;
 	int breakPointAddr = -1;
 	int breakPointHL = -1;
-	int isInMenu = 0;
+	bool isInMenu = true;
 	std::vector<std::vector<std::unordered_set<word>>> debugVecVec;
 	for (int i = 0; i < 4; i++)
 	{
@@ -5845,6 +5844,7 @@ void DebuggerBottomScreen()
 			menuvec.push_back("[Back]");
 			menuvec.push_back("[Step In]");
 			menuvec.push_back("[Run Trace]");
+			menuvec.push_back("[Display VRAM]");
 			menuvec.push_back("[Set BreakPoint]");
 			menuvec.push_back("[Set Break HL value]");
 			menuvec.push_back("[Set Break IO In Value]");
@@ -5884,13 +5884,106 @@ void DebuggerBottomScreen()
 				//val = strtol(kbdchar, NULL, 16);
 				//DisplayMemory(val);
 			}
-			isInMenu = 0;
+			else if(selectmenu == "[Display VRAM]")
+			{
+				bool redrawVRAM = true;
+				int startVram = 0;
+				int i, j;
+				if (((ScrMode == 6) || (ScrMode == 7)) && (IsWide))InitWbuf();
+				else InitXbuf();
+				while (aptMainLoop())
+				{
+					if (redrawVRAM)
+					{
+						for (i = startVram, j = 0; j < 212; i++, j++)
+						{
+							if (ModeYAE)DrawVRAM10(i, j);
+							else if (ModeYJK)DrawVRAM12(i, j);
+							else
+							{
+								switch (ScrMode)
+								{
+								case 0:
+									DrawVRAM0(i, j);
+									break;
+								case 1:
+									DrawVRAM1(i, j);
+									break;
+								case 2:
+									DrawVRAM2(i, j);
+									break;
+								case 3:
+									DrawVRAM3(i, j);
+									break;
+								case 4:
+									/* Screen4 has same VRAM structure as Screen2 except sprites. */
+									DrawVRAM2(i, j);
+									break;
+								case 5:
+									DrawVRAM5(i, j);
+									break;
+								case 6:
+									DrawVRAM6(i, j);
+									break;
+								case 7:
+									DrawVRAM7(i, j);
+									break;
+								case 8:
+									DrawVRAM8(i, j);
+									break;
+								default:
+									DrawVRAM5(i, j);
+									break;
+								}
+							}
+						}
+						DoPutImage();
+						redrawVRAM = false;
+					}
+					hidScanInput();
+					kDown = hidKeysDown();
+					kHeld = hidKeysHeld();
+					if (kDown & KEY_B)break;
+					if (kDown & KEY_START)break;
+					if (kDown & KEY_L)
+					{
+						startVram -= 64;
+						startVram = startVram <= 0 ? 0 : startVram;
+						SDL_Delay(TextDelay);	/* Need this for fix error on hidKeysHeld in same frame. */
+						redrawVRAM = true;
+					}
+					if (kDown & KEY_R)
+					{
+						startVram += 64;
+						startVram = startVram >= 0x400 ? 0x400 : startVram;
+						SDL_Delay(TextDelay);
+						redrawVRAM = true;
+					}
+					if (kHeld & KEY_UP)
+					{
+						startVram = startVram <= 0 ? 0 : startVram - 1;
+						SDL_Delay(TextDelay);
+						redrawVRAM = true;
+					}
+					if (kHeld & KEY_DOWN)
+					{
+						startVram = startVram >= 0x400 ? 0x400 : startVram + 1;
+						SDL_Delay(TextDelay);
+						redrawVRAM = true;
+					}
+					BrowseHomeButton();
+					if (ExitNow == 1)return;
+				}
+				if (((ScrMode == 6) || (ScrMode == 7)) && (IsWide))InitWbuf();
+				else InitXbuf();
+			}
+			isInMenu = false;
 		}
 
 		if (!debuggerAction)
 		{
 			if (kDown & KEY_A)debuggerAction = 1;
-			else if (kDown & KEY_B)isInMenu = 1;
+			else if (kDown & KEY_B)isInMenu = true;
 			else if(kDown & KEY_Y)debuggerAction = 2;
 
 			hidTouchRead(&tp);
@@ -5899,7 +5992,7 @@ void DebuggerBottomScreen()
 			if (kDown & KEY_TOUCH)
 			{
 				kDown &= ~KEY_TOUCH;
-				if (CheckCancelButton(px, py))isInMenu = 1;
+				if (CheckCancelButton(px, py))isInMenu = true;
 				if (CheckOKButton(px, py))debuggerAction = 1;
 			}
 		}
@@ -6016,7 +6109,7 @@ void DebuggerBottomScreen()
 		else if (kDown & KEY_B)
 		{
 			//break;
-			isInMenu = 1;
+			isInMenu = true;
 		}
 		else if (kHeld & KEY_UP)
 		{

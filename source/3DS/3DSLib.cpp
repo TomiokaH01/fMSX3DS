@@ -170,6 +170,11 @@ bool IsStart = true;
 //#include "CommonMux.h"
 #include "CommonMux3DS.h"
 
+#ifdef DEBUGGER_3DS
+#include "CommonDebug3DS.h"
+#endif // DEBUGGER_3DS
+
+
 static const int KeyLayout1Line[] =
 {
 	0,32, KBD_STOP,32,63,KBD_F1,63,94,KBD_F2,94,123,KBD_F3,125,156,KBD_F4
@@ -1614,6 +1619,13 @@ void SetScreenFilter(void)
 		C3D_TexSetFilter(&ScreenTex, GPU_LINEAR, GPU_LINEAR);
 		C3D_TexSetFilter(&WideTex, GPU_LINEAR, GPU_LINEAR);
 	}
+}
+
+
+/* Wrapper function */
+void DoPutImage()
+{
+	PutImage();
 }
 
 
@@ -3460,19 +3472,6 @@ void LoadCartAtStart()
 }
 
 
-void InitXbuf()
-{
-	if(V9KXBuf==NULL)V9KXBuf = (unsigned short*)malloc(WIDTH * HEIGHT * sizeof(unsigned short) * 2);
-	int i;
-	int XSize = WIDTH * HEIGHT * 2;
-	for (i = 0; i < XSize; i++)
-	{
-		//XBuf[i] = 0x00;
-		V9KXBuf[i] = 0x00;
-	}
-}
-
-
 #ifdef SUPERIMPOSE
 void InitScreenShotTexture(SDL_Surface* ssurface)
 {
@@ -3495,6 +3494,30 @@ void ChangeScreenImposeTransparent(int alpha)
 	C3DTextureChangeAlpha(ScreenTexImpose, alpha);
 }
 #endif // SUPERIMPOSE
+
+
+void InitXbuf()
+{
+	if (XBuf == NULL)XBuf = (unsigned short*)malloc(WIDTH * HEIGHT * sizeof(unsigned short) * 2);
+	int i;
+	int XSize = WIDTH * HEIGHT * 2;
+	for (i = 0; i < XSize; i++)
+	{
+		XBuf[i] = 0x00;
+	}
+}
+
+
+void InitWbuf()
+{
+	if (WBuf == NULL)WBuf = (unsigned short*)malloc(512 * HEIGHT * sizeof(unsigned short) * 2);
+	int i;
+	int WSize = 512 * HEIGHT * 2;
+	for (i = 0; i < WSize; i++)
+	{
+		WBuf[i] = 0x00;
+	}
+}
 
 
 void ShowMessage3DS(char* msg, char* msg2)
@@ -3555,6 +3578,18 @@ void Show_3DS_BreakPointArg(const char* format, ...)
 }
 
 #ifdef VDP_V9990
+void InitV9KXbuf()
+{
+	if (V9KXBuf == NULL)V9KXBuf = (unsigned short*)malloc(WIDTH * HEIGHT * sizeof(unsigned short) * 2);
+	int i;
+	int XSize = WIDTH * HEIGHT * 2;
+	for (i = 0; i < XSize; i++)
+	{
+		//XBuf[i] = 0x00;
+		V9KXBuf[i] = 0x00;
+	}
+}
+
 void V9990SetColor(byte N, byte R, byte G, byte B)
 {
 	unsigned int J;

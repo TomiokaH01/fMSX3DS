@@ -252,7 +252,10 @@ int CalcCRC32(void* Buf, const char* filePath, int Size);
 void CheckSpecialCart(void* Buf, int Size, int Type, int Slot);
 void LoadCartAtStart();
 void InitXbuf();
-
+void InitWbuf();
+#ifdef VDP_V9990
+void InitV9KXbuf();
+#endif // VDP_V9990
 #ifdef HDD_NEXTOR
 void DoAutoSaveHDD();
 void AutoSaveHDD();
@@ -264,6 +267,10 @@ void ChangeScreenImposeTransparent(int alpha);
 #ifdef MSX0_OLED
 void DrawOLED_Display(int pos, unsigned char val);
 #endif // MSX0_OLED
+#ifdef DEBUGGER_3DS
+void DoPutImage();
+#endif // DEBUGGER_3DS
+
 
 void ShowMessage3DS(char* msg, char* msg2);
 void DoReloadFMPAC();
