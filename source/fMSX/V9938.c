@@ -42,6 +42,8 @@
 //Taken from BlueMSX    http://bluemsx.msxblue.com/index.htm
 #define VDP_VRMP7(X, Y) (VRAM + ((Y & 511) << 7) + ((X & 511) >> 2) + ((X & 2) << 15))
 #define VDP_VRMP8(X, Y) (VRAM + ((Y & 511) << 7) + ((X & 255) >> 1) + ((X & 1) << 16))
+/* V9958 Screen Mode 0-4 */
+#define VDP_VRMPP(X, Y) (VRAM + ((Y&511)<<8) + (X&255))
 #else
 #define VDP_VRMP7(X, Y) (VRAM + ((Y&511)<<8) + ((X&511)>>1))
 #define VDP_VRMP8(X, Y) (VRAM + ((Y&511)<<8) + (X&255))
@@ -133,6 +135,10 @@ static byte VDPpoint5(register int SX, register int SY);
 static byte VDPpoint6(register int SX, register int SY);
 static byte VDPpoint7(register int SX, register int SY);
 static byte VDPpoint8(register int SX, register int SY);
+#ifdef _3DS
+static byte VDPpointP(register int SX, register int SY);
+#endif // _3DS
+
 
 static byte VDPpoint(register byte SM, 
                      register int SX, register int SY);
@@ -148,6 +154,10 @@ static void VDPpset7(register int DX, register int DY,
                      register byte CL, register byte OP);
 static void VDPpset8(register int DX, register int DY,
                      register byte CL, register byte OP);
+#ifdef _3DS
+static void VDPpsetP(register int DX, register int DY,
+                    register byte CL, register byte OP);
+#endif // _3DS
 
 static void VDPpset(register byte SM,
                     register int DX, register int DY,
@@ -211,6 +221,10 @@ INLINE byte *VDPVRMP(byte M,int X,int Y)
     case 1: return VDP_VRMP6(X,Y);
     case 2: return VDP_VRMP7(X,Y);
     case 3: return VDP_VRMP8(X,Y);
+#ifdef _3DS
+    case 8: return VDP_VRMPP(X, Y);
+#endif // _3DS
+
   }
 
   return(VRAM);
@@ -254,6 +268,14 @@ INLINE byte VDPpoint8(int SX, int SY)
   return *VDP_VRMP8(SX, SY);
 }
 
+/** VDPpointP() ***********************************************/
+/** Get a pixel on screen 0-4                               **/
+/*************************************************************/
+INLINE byte VDPpointP(int SX, int SY)
+{
+    return *VDP_VRMPP(SX, SY);
+}
+
 /** VDPpoint() ************************************************/
 /** Get a pixel on a screen                                 **/
 /*************************************************************/
@@ -265,6 +287,7 @@ INLINE byte VDPpoint(byte SM, int SX, int SY)
     case 1: return VDPpoint6(SX,SY);
     case 2: return VDPpoint7(SX,SY);
     case 3: return VDPpoint8(SX,SY);
+    case 8: return VDPpointP(SX, SY);
   }
 
   return(0);
@@ -333,6 +356,15 @@ INLINE void VDPpset8(int DX, int DY, byte CL, byte OP)
                   CL, 0, OP);
 }
 
+#ifdef _3DS
+INLINE void VDPpsetP(int DX, int DY, byte CL, byte OP)
+{
+    VDPpsetlowlevel(VDP_VRMPP(DX, DY),
+        CL, 0, OP);
+}
+#endif // _3DS
+
+
 /** VDPpset() ************************************************/
 /** Set a pixel on a screen                                 **/
 /*************************************************************/
@@ -343,6 +375,10 @@ INLINE void VDPpset(byte SM, int DX, int DY, byte CL, byte OP)
     case 1: VDPpset6(DX, DY, CL, OP); break;
     case 2: VDPpset7(DX, DY, CL, OP); break;
     case 3: VDPpset8(DX, DY, CL, OP); break;
+#ifdef _3DS
+    case 8: VDPpsetP(DX, DY, CL, OP); break;
+#endif // _3DS
+
   }
 }
 
@@ -397,6 +433,11 @@ void SrchEngine(void)
             break;
     case 8: pre_srch VDPpoint8(SX, SY) post_srch(256)
             break;
+#ifdef _3DS
+    case 13: pre_srch VDPpointP(SX, SY) post_srch(256)
+        break;
+#endif // _3DS
+
   }
 
   if ((VdpOpsCnt=cnt)>0) {
@@ -469,6 +510,11 @@ void LineEngine(void)
               break;
       case 8: pre_loop VDPpset8(DX, DY, CL, LO); post_linexmaj(256)
               break;
+#ifdef _3DS
+      case 13: pre_loop VDPpsetP(DX, DY, CL, LO); post_linexmaj(256)
+          break;
+#endif // _3DS
+
     }
   else
     /* Y-Axis is major direction */
@@ -485,6 +531,11 @@ void LineEngine(void)
               break;
       case 8: pre_loop VDPpset8(DX, DY, CL, LO); post_lineymaj(256)
               break;
+#ifdef _3DS
+      case 13: pre_loop VDPpsetP(DX, DY, CL, LO); post_lineymaj(256)
+          break;
+#endif // _3DS
+
     }
 
   if ((VdpOpsCnt=cnt)>0) {
@@ -536,6 +587,10 @@ void LmmvEngine(void)
             break;
     case 8: pre_loop VDPpset8(ADX, DY, CL, LO); post__x_y(256)
             break;
+#ifdef _3DS
+    case 13: pre_loop VDPpsetP(ADX, DY, CL, LO); post__x_y(256)
+        break;
+#endif // _3DS
   }
 
   if ((VdpOpsCnt=cnt)>0) {
@@ -593,6 +648,8 @@ void LmmmEngine(void)
             break;
     case 8: pre_loop VDPpset8(ADX, DY, VDPpoint8(ASX, SY), LO); post_xxyy(256)
             break;
+    case 13: pre_loop VDPpsetP(ADX, DY, VDPpointP(ASX, SY), LO); post_xxyy(256)
+        break;
   }
 
   if ((VdpOpsCnt=cnt)>0) {
@@ -664,13 +721,17 @@ void LmmcEngine(void)
 {
   if ((VDPStatus[2]&0x80)!=0x80) {
 #ifdef _3DS
-      register byte SM = FixScrMode - 5;
+      register byte  SM = ScrMode < 5 ? 3 : FixScrMode - 5;
 #else
     register byte SM=ScrMode-5;
 #endif // _3DS
 
     VDPStatus[7]=VDP[44]&=Mask[SM];
+#ifdef _3DS
+    VDP_PSET(FixScrMode-5, MMC.ADX, MMC.DY, VDP[44], MMC.LO);
+#else
     VDP_PSET(SM, MMC.ADX, MMC.DY, VDP[44], MMC.LO);
+#endif // _3DS
     VdpOpsCnt-=GetVdpTimingValue(lmmv_timing);
     VDPStatus[2]|=0x80;
 
@@ -726,6 +787,8 @@ void HmmvEngine(void)
             break;
     case 8: pre_loop *VDP_VRMP8(ADX, DY) = CL; post__x_y(256)
             break;
+    case 13: pre_loop *VDP_VRMPP(ADX, DY) = CL; post__x_y(256)
+        break;
   }
 
   if ((VdpOpsCnt=cnt)>0) {
@@ -782,6 +845,8 @@ void HmmmEngine(void)
             break;
     case 8: pre_loop *VDP_VRMP8(ADX, DY) = *VDP_VRMP8(ASX, SY); post_xxyy(256)
             break;
+    case 13: pre_loop *VDP_VRMPP(ADX, DY) = *VDP_VRMPP(ASX, SY); post_xxyy(256)
+        break;
   }
 
   if ((VdpOpsCnt=cnt)>0) {
@@ -843,6 +908,8 @@ void YmmmEngine(void)
             break;
     case 8: pre_loop *VDP_VRMP8(ADX, DY) = *VDP_VRMP8(ADX, SY); post__xyy(256)
             break;
+    case 13: pre_loop *VDP_VRMPP(ADX, DY) = *VDP_VRMPP(ADX, SY); post__xyy(256)
+        break;
   }
 
   if ((VdpOpsCnt=cnt)>0) {
@@ -879,7 +946,7 @@ void HmmcEngine(void)
   if ((VDPStatus[2]&0x80)!=0x80) {
 
 #ifdef _3DS
-      * VDP_VRMP(FixScrMode - 5, MMC.ADX, MMC.DY) = VDP[44];
+      *VDP_VRMP(ScrMode < 5 ? 8 : FixScrMode - 5, MMC.ADX, MMC.DY) = VDP[44];
 #else
     *VDP_VRMP(ScrMode-5, MMC.ADX, MMC.DY)=VDP[44];
 #endif // _3DS
@@ -976,8 +1043,9 @@ byte VDPDraw(byte Op)
       /* Add support for V9958 that can use VDP ops with SCREEN 0-4 */
       if (!(VDP[25] & 0x40) || !(VDPStatus[1] & 0x04))return(0);
   }
-  FixScrMode = ScrMode < 5 ? 8 : ScrMode;
-  SM = FixScrMode - 5;
+  /* V9958 Screen Mode 0-4 treat as Screen8 but VRAM mapping is same as Screen 0-4 */
+  FixScrMode = ScrMode < 5 ? 13 : ScrMode;
+  SM = ScrMode < 5 ? 3 :  ScrMode - 5;
 #else
     return(0);
 
@@ -1001,13 +1069,21 @@ byte VDPDraw(byte Op)
       VDPStatus[2]&=0xFE;
       VdpEngine=0;  
       VDPStatus[7]=VDP[44]=
+#ifdef _3DS
+          VDP_POINT(FixScrMode-5, VDP[32] + ((int)VDP[33] << 8),
+#else
                    VDP_POINT(SM, VDP[32]+((int)VDP[33]<<8),
+#endif // _3DS
                                  VDP[34]+((int)VDP[35]<<8));
       return 1;
     case CM_PSET:
       VDPStatus[2]&=0xFE;
-      VdpEngine=0;  
+      VdpEngine=0;
+#ifdef _3DS
+      VDP_PSET(FixScrMode-5,
+#else
       VDP_PSET(SM, 
+#endif // _3DS
                VDP[36]+((int)VDP[37]<<8),
                VDP[38]+((int)VDP[39]<<8),
                VDP[44],
