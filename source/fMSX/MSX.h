@@ -677,6 +677,18 @@ void DrawKeyboard3DS();
 byte* LinearFDIPatch(byte ID, int SectorN, byte PerTrack, byte Heads);
 byte DiskReadPatch(byte ID, byte* Buf, int N, byte PerTrack, byte Heads);
 byte DiskWritePatch(byte ID, byte* Buf, int N, byte PerTrack, byte Heads);
+#ifdef DEBUGGER_3DS
+void DrawVRAM0(register int Y, register int DY);
+void DrawVRAM1(register int Y, register int DY);
+void DrawVRAM2(register int Y, register int DY);
+void DrawVRAM3(register int Y, register int DY);
+void DrawVRAM5(register int Y, register int DY);
+void DrawVRAM6(register int Y, register int DY);
+void DrawVRAM7(register int Y, register int DY);
+void DrawVRAM8(register int Y, register int DY);
+void DrawVRAM10(register int Y, register int DY);
+void DrawVRAM12(register int Y, register int DY);
+#endif // DEBUGGER_3DS
 #ifdef HDD_NEXTOR
 byte* LinearHDD(byte ID, int SectorN, byte PerTrack, byte Heads);
 byte HDDRead(byte ID, byte* Buf, int N, byte PerTrack, byte Heads);

@@ -7179,7 +7179,7 @@ void InitV9990()
 
     for (J = 0; J < 256; J +=4) V9990SetColor(J, 0x1F, 0x1F, 0x1F);
 
-    InitXbuf();
+    InitV9KXbuf();
 
     VSize = 32 * 0x4000;
     P = ResizeMemory(V9KVRAM, VSize);
