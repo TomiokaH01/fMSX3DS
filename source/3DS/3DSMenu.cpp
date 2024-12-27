@@ -5793,10 +5793,10 @@ void DebuggerBottomScreen()
 				}
 			}
 
-			std::string regstrs[13] = { "AF :", "BC :", "DE :", "HL :", "AF':", "BC':", "DE':", "HL':", "SP :", "PC :", "", "PSlot:", "SSlot:" };
-			int regsvals[13] = {CPU.AF.W, CPU.BC.W, CPU.DE.W, CPU.HL.W, CPU.AF1.W, CPU.BC1.W, CPU.DE1.W, CPU.HL1.W, CPU.SP.W, CPU.PC.W, 0,
-				PSLReg&0x03,  SSLReg[(PSLReg&0x03)]&0x03};
-			for (int i = 0; i < 13; i++)
+			std::string regstrs[14] = { "AF :", "BC :", "DE :", "HL :", "AF':", "BC':", "DE':", "HL':", "SP :", "PC :", "", "PSlot:", "SSlot:", "Screen:"};
+			int regsvals[14] = {CPU.AF.W, CPU.BC.W, CPU.DE.W, CPU.HL.W, CPU.AF1.W, CPU.BC1.W, CPU.DE1.W, CPU.HL1.W, CPU.SP.W, CPU.PC.W, 0,
+				PSLReg&0x03,  SSLReg[(PSLReg&0x03)]&0x03, ScrMode};
+			for (int i = 0; i < 14; i++)
 			{
 				if (regstrs[i] == "")continue;
 				std::ostringstream oss;
@@ -5831,7 +5831,7 @@ void DebuggerBottomScreen()
 		}
 		SDL_Delay(10);
 		hidScanInput();
-		unsigned int debuggerAction = 0;		/* 1:StepOver  2:RunTrace */
+		unsigned int debuggerAction = 0;		/* 1:StepIn  2:RunTrace */
 		u32 kDown = hidKeysDown();
 		u32 kHeld = hidKeysHeld();
 		if ((kDown & KEY_START) || (isInMenu))
@@ -5978,11 +5978,11 @@ void DebuggerBottomScreen()
 			}
 			debugVecVec[PSLReg & 0x03][SSLReg[PSLReg & 0x03] & 0x03] = currDebugSet;
 			needRedraw = true;
-			if (debuggerAction==1)
+			if (debuggerAction==1)		/* Step In */
 			{
 				StepInZ80(&CPU);
 			}
-			else if(debuggerAction==2)
+			else if(debuggerAction==2)	/* Run Trace */
 			{
 				C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
 				C2D_TargetClear(BottomRenderTartget, Color_Screen);
