@@ -458,6 +458,10 @@ C3D_RenderTarget* BottomRenderTartget;
 #ifdef USE_3D
 C3D_RenderTarget* TopRenderTargetR;
 #endif // USE_3D
+#ifdef DEBUGGER_3DS
+std::vector<int> breakVec;
+#endif // DEBUGGER_3DS
+
 
 
 //byte ShowTenkey = 0;
@@ -5740,6 +5744,7 @@ int GetSoftKeyInput(char* text)
 	swkbdInit(&swkbd, SWKBD_TYPE_QWERTY, 1, 4);
 	swkbdSetHintText(&swkbd, text);
 	button = swkbdInputText(&swkbd, kbdchar, sizeof(kbdchar));
+	if (swkbd.text_length == 0)return -1;
 	val = strtol(kbdchar, NULL, 16);
 	return val;
 }
@@ -5756,8 +5761,8 @@ void DebuggerBottomScreen()
 	int selectIndex = 0;
 	int startid = 0;
 	int sumpc = 0;
-	int breakPointAddr = -1;
 	int breakPointHL = -1;
+	int stepType = 0;	/* 0:StepIn 1: StepOver */
 	bool isInMenu = true;
 	std::vector<std::vector<std::unordered_set<word>>> debugVecVec;
 	for (int i = 0; i < 4; i++)
@@ -5821,7 +5826,8 @@ void DebuggerBottomScreen()
 				DrawText(StringToChar(regstr)
 					, textStartPos, textSmallSize*i, 1.0f, fontSmallSize, fontSmallSize, Color_White);
 			}
-			DrawOKButton("StepIn(A)");
+			if (stepType)DrawOKButton("StepOver(A)");
+			else DrawOKButton("StepIn(A)");
 			DrawCancelButton("Back(B)");
 
 			int textNum = 240 / textSmallSize - 2;
@@ -5830,7 +5836,7 @@ void DebuggerBottomScreen()
 		}
 		SDL_Delay(10);
 		hidScanInput();
-		unsigned int debuggerAction = 0;		/* 1:StepIn  2:RunTrace */
+		unsigned int debuggerAction = 0;		/* 1:StepIn  2:RunTrace 3:StepOver */
 		u32 kDown = hidKeysDown();
 		u32 kHeld = hidKeysHeld();
 		if ((kDown & KEY_START) || (isInMenu))
@@ -5842,10 +5848,13 @@ void DebuggerBottomScreen()
 			std::vector<char*> menuvec;
 			menuvec.clear();
 			menuvec.push_back("[Back]");
-			menuvec.push_back("[Step In]");
-			menuvec.push_back("[Run Trace]");
 			menuvec.push_back("[Display VRAM]");
+			menuvec.push_back("[Step In]");
+			menuvec.push_back("[Step Over]");
+			menuvec.push_back("[Run Trace]");
 			menuvec.push_back("[Set BreakPoint]");
+			menuvec.push_back("[Remove BreakPoint]");
+			menuvec.push_back("[Clear BreakPoint]");
 			menuvec.push_back("[Set Break HL value]");
 			menuvec.push_back("[Set Break IO In Value]");
 			menuvec.push_back("[Display Memory]");
@@ -5857,22 +5866,54 @@ void DebuggerBottomScreen()
 			else if( selectmenu == "[Step In]")
 			{
 				debuggerAction = 0x01;
+				stepType = 0;
 			}
 			else if(selectmenu == "[Run Trace]")
 			{
 				debuggerAction = 0x02;
 			}
+			else if(selectmenu == "[Step Over]")
+			{
+				debuggerAction = 0x03;
+				stepType = 1;
+			}
 			else if(selectmenu == "[Set Break HL value]")
 			{
-				breakPointHL = GetSoftKeyInput("Enter Break HL value");
+				int breakInt = GetSoftKeyInput("Enter Break HL value");
+				if(breakInt >= 0)breakPointHL = breakInt;
 			}
 			else if(selectmenu == "[Set BreakPoint]")
 			{
-				breakPointAddr = GetSoftKeyInput("Enter Break Point Address");
+				int breakInt = GetSoftKeyInput("Enter Break Point Address");
+				if (breakInt >= 0)breakVec.push_back(breakInt);
+			}
+			else if(selectmenu == "[Remove BreakPoint]")
+			{
+				std::vector<char*> breakMenu;
+				breakMenu.clear();
+				breakMenu.push_back("[Back]");
+				int i;
+				int breakSize = breakVec.size();
+				for (i = 0; i < breakSize; i++)
+				{
+					std::stringstream ss;
+					ss << std::hex << breakVec[i];
+					breakMenu.push_back(StringToChar(ss.str()));
+				}
+				if (breakSize > 0)
+				{
+					int removeIdx = BrowseInt("Select the breakpoint addr for remove", breakMenu, 0, 0, false);
+					if (removeIdx > 0)breakVec.erase(breakVec.begin() + (removeIdx - 1));
+				}
+			}
+			else if(selectmenu == "[Clear BreakPoint]")
+			{
+				if (BrowseOK("Clear all break points?", NULL))breakVec.clear();
 			}
 			else if(selectmenu == "[Display Memory]")
 			{
-				DisplayMemory(GetSoftKeyInput("Enter RAM Address"));
+				int MemInt = GetSoftKeyInput("Enter RAM Address");
+				if(MemInt >= 0)DisplayMemory(MemInt);
 
 				//static SwkbdState swkbd;
 				//SwkbdButton button = SWKBD_BUTTON_NONE;
@@ -5982,7 +6023,11 @@ void DebuggerBottomScreen()
 
 		if (!debuggerAction)
 		{
-			if (kDown & KEY_A)debuggerAction = 1;
+			//if (kDown & KEY_A)debuggerAction = 1;
+			if (kDown & KEY_A)
+			{
+				debuggerAction = stepType ? 3 : 1;
+			}
 			else if (kDown & KEY_B)isInMenu = true;
 			else if(kDown & KEY_Y)debuggerAction = 2;
 
@@ -5993,7 +6038,11 @@ void DebuggerBottomScreen()
 			{
 				kDown &= ~KEY_TOUCH;
 				if (CheckCancelButton(px, py))isInMenu = true;
-				if (CheckOKButton(px, py))debuggerAction = 1;
+				if (CheckOKButton(px, py))
+				{
+					debuggerAction = stepType ? 3 : 1;
+				}
+				//if (CheckOKButton(px, py))debuggerAction = 1;
 			}
 		}
 		if (debuggerAction)
@@ -6077,33 +6126,31 @@ void DebuggerBottomScreen()
 			}
 			else if(debuggerAction==2)	/* Run Trace */
 			{
-				C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
-				C2D_TargetClear(BottomRenderTartget, Color_Screen);
-				C2D_SceneBegin(BottomRenderTartget);
-				DrawCancelButton("Back(B)");
-				C3D_FrameEnd(0);
-				needRedraw = true;
+				//C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+				//C2D_TargetClear(BottomRenderTartget, Color_Screen);
+				//C2D_SceneBegin(BottomRenderTartget);
+				//DrawCancelButton("Back(B)");
+				//C3D_FrameEnd(0);
+				//needRedraw = true;
+				DrawKeyboard3DS();
+				int i;
+				int breakSize = breakVec.size();
 				while (aptMainLoop())
 				{
-					hidScanInput();
-					u32 kDown = hidKeysDown();
-					if (kDown & KEY_B)break;
-
-					hidTouchRead(&tp);
-					int px = tp.px;
-					int py = tp.py;
-					if (kDown & KEY_TOUCH)
-					{
-						kDown &= ~KEY_TOUCH;
-						if (CheckCancelButton(px, py))break;
-					}
-
 					StepInZ80(&CPU);
-					if (CPU.PC.W == breakPointAddr)break;
 					if (CPU.HL.W == breakPointHL)break;
-					BrowseHomeButton();
-					if (ExitNow == 1)return;
+					bool isBreak = false;
+					breakSize = breakVec.size();
+					for (i = 0; i < breakSize; i++)
+					{
+						if (breakVec[i] == CPU.PC.W)isBreak = true;
+					}
+					if (isBreak)break;
 				}
+			}
+			else if(debuggerAction == 3)	/* Step Over */
+			{
+				StepOverZ80(&CPU);
 			}
 		}
 		else if (kDown & KEY_B)
@@ -6255,37 +6302,4 @@ void DisplayMemory(int startmemory)
 }
 
 
-bool BrowseDebuggerMenu()
-{
-	std::vector<char*> menuvec;
-	menuvec.clear();
-	menuvec.push_back("[Back]");
-	menuvec.push_back("[Set BreakPoint]");
-	menuvec.push_back("[Display Memory]");
-	menuvec.push_back("[Exit Debugger]");
-	menuvec.push_back("");
-	int menuid = BrowseInt("<Debugger Menu>", menuvec, 0, 0, false);
-
-	std::string menustr = std::string(menuvec[menuid]);
-	if (menustr == "[Back]")
-	{
-		return false;
-	}
-	else if (menustr == "[Exit Debugger]")
-	{
-		return true;
-	}
-	else if(menustr == "[Display Memory]")
-	{
-		static SwkbdState swkbd;
-		SwkbdButton button = SWKBD_BUTTON_NONE;
-		static char kbdchar[5];
-		static int val;
-		swkbdInit(&swkbd, SWKBD_TYPE_QWERTY, 1, 4);
-		swkbdSetHintText(&swkbd, "Enter Memory Address");
-		button = swkbdInputText(&swkbd, kbdchar, sizeof(kbdchar));
-		val = strtol(kbdchar, NULL, 16);
-	}
-	return false;
-}
 #endif // DEBUGGER_3DS

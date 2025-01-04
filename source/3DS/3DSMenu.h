@@ -106,6 +106,5 @@ int GetSoftKeyInput(char* text);
 
 #ifdef DEBUGGER_3DS
 void DebuggerBottomScreen();
-bool BrowseDebuggerMenu();
 void DisplayMemory(int startmemory);
 #endif // DEBUGGER_3DS
