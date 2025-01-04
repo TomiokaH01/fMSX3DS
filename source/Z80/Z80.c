@@ -896,5 +896,187 @@ void StepInZ80(Z80* R)
         if (J.W != INT_NONE) IntZ80(R, J.W);   /* Int-pt if needed */
     }
 }
+
+
+void StepOverZ80(Z80* R)
+{
+    byte isLoop = 0;
+    int retPC = 0;
+    while (aptMainLoop())
+    {
+        register byte I;
+        register pair J;
+        I = OpZ80(R->PC.W++);
+        R->ICount -= (R->User & 0x01) ? Cycles_R800[I] : Cycles[I];
+        R->ICount -= Cycles[I];
+
+        /* R register incremented on each M1 cycle */
+        INCR(1);
+
+        switch (I)
+        {
+#include "Codes.h"
+        case PFX_CB: CodesCB(R); break;
+        case PFX_ED:
+            switch (OpZ80(R->PC.W+1))
+            {
+            case 0x45:      /*  RETN    */
+            case 0x4D:      /*  RETI    */
+                isLoop = 0;
+                break;
+            default:
+                break;
+            }
+            CodesED(R);
+            break;
+        case PFX_FD: CodesFD(R); break;
+        case PFX_DD: CodesDD(R); break;
+        }
+        /* If cycle counter expired... */
+        if (R->ICount <= 0)
+        {
+            /* If we have come after EI, get address from IRequest */
+            /* Otherwise, get it from the loop handler             */
+            if (R->IFF & IFF_EI)
+            {
+                R->IFF = (R->IFF & ~IFF_EI) | IFF_1; /* Done with AfterEI state */
+                UpdateTurboRTimer(R->IBackup - 1);
+
+                R->ICount += R->IBackup - 1;       /* Restore the ICount      */
+
+                /* Call periodic handler or set pending IRQ */
+                if (R->ICount > 0) J.W = R->IRequest;
+                else
+                {
+                    J.W = LoopZ80(R);        /* Call periodic handler    */
+                    R->ICount += R->IPeriod; /* Reset the cycle counter  */
+                    UpdateTurboRTimer(R->IPeriod);
+
+                    if (J.W == INT_NONE) J.W = R->IRequest;  /* Pending IRQ */
+
+                }
+            }
+            else
+            {
+                J.W = LoopZ80(R);          /* Call periodic handler    */
+                R->ICount += R->IPeriod;   /* Reset the cycle counter  */
+                UpdateTurboRTimer(R->IPeriod);
+                if (J.W == INT_NONE) J.W = R->IRequest;    /* Pending IRQ */
+            }
+
+            if (J.W == INT_QUIT) return; /* Exit if INT_QUIT */
+            if (J.W != INT_NONE) IntZ80(R, J.W);   /* Int-pt if needed */
+        }
+
+        switch (OpZ80(R->PC.W))
+            //switch (I)
+        {
+        case 0xCD:      /*  CALL     */
+            retPC = R->PC.W + 3;
+            break;
+        case 0xC4:      /*  CALL_NZ  */
+            if (!(R->AF.B.l & Z_FLAG))retPC = R->PC.W + 3;
+            break;
+        case 0xCC:      /*  CALL_Z   */
+            if (R->AF.B.l & Z_FLAG)retPC = R->PC.W + 3;
+            break;
+        case 0xD4:      /*  CALL_NC  */
+            if (!(R->AF.B.l & C_FLAG))retPC = R->PC.W + 3;
+            break;
+        case 0xDC:      /*  CALL_C   */
+            if (R->AF.B.l & C_FLAG)retPC = R->PC.W + 3;
+            break;
+        case 0xE4:      /*  CALL_PO  */
+            if (!(R->AF.B.l & P_FLAG))retPC = R->PC.W + 3;
+            break;
+        case 0xEC:      /*  CALL_PE  */
+            if (R->AF.B.l & P_FLAG)retPC = R->PC.W + 3;
+            break;
+        case 0xF4:      /*  CALL_P   */
+            if (!(R->AF.B.l & S_FLAG))retPC = R->PC.W + 3;
+            break;
+        case 0xFC:      /*  CALL_M   */
+            if (R->AF.B.l & S_FLAG)retPC = R->PC.W + 3;
+            break;
+        default:
+            break;
+        }
+
+        if (R->PC.W == retPC)retPC = 0;
+        if (!retPC)break;
+
+        //switch (OpZ80(R->PC.W))
+        ////switch (I)
+        //{
+        //case 0xCD:      /*  CALL     */
+        //    isLoop++;
+        //    break;
+        //case 0xC4:      /*  CALL_NZ  */
+        //    if (!(R->AF.B.l & Z_FLAG))isLoop++;
+        //    break;
+        //case 0xCC:      /*  CALL_Z   */
+        //    if (R->AF.B.l & Z_FLAG)isLoop++;
+        //    break;
+        //case 0xD4:      /*  CALL_NC  */
+        //    if (!(R->AF.B.l & C_FLAG))isLoop++;
+        //    break;
+        //case 0xDC:      /*  CALL_C   */
+        //    if (R->AF.B.l & C_FLAG)isLoop++;
+        //    break;
+        //case 0xE4:      /*  CALL_PO  */
+        //    if (!(R->AF.B.l & P_FLAG))isLoop++;
+        //    break;
+        //case 0xEC:      /*  CALL_PE  */
+        //    if (R->AF.B.l & P_FLAG)isLoop++;
+        //    break;
+        //case 0xF4:      /*  CALL_P   */
+        //    if (!(R->AF.B.l & S_FLAG))isLoop++;
+        //    break;
+        //case 0xFC:      /*  CALL_M   */
+        //    if (R->AF.B.l & S_FLAG)isLoop++;
+        //    break;
+        //case 0xC0:      /*  RET_NZ  */
+        //    if (!(R->AF.B.l & Z_FLAG))isLoop = !isLoop ? 0 : isLoop-1;
+        //    break;
+        //case 0xC8:      /*  RET_Z   */
+        //    if (R->AF.B.l & Z_FLAG)isLoop = !isLoop ? 0 : isLoop - 1;
+        //    break;
+        //case 0xD0:      /*  RET_NC  */
+        //    if (!(R->AF.B.l & C_FLAG))isLoop = !isLoop ? 0 : isLoop - 1;
+        //    break;
+        //case 0xD8:      /*  RET_C   */
+        //    if (R->AF.B.l & C_FLAG)isLoop = !isLoop ? 0 : isLoop - 1;
+        //    break;
+        //case 0xE0:      /*  RET_PO  */
+        //    if (!(R->AF.B.l & P_FLAG))isLoop = !isLoop ? 0 : isLoop - 1;
+        //    break;
+        //case 0xE8:      /*  RET_PE  */
+        //    if (R->AF.B.l & P_FLAG)isLoop = !isLoop ? 0 : isLoop - 1;
+        //    break;
+        //case 0xF0:      /*  RET_P   */
+        //    if (!(R->AF.B.l & S_FLAG))isLoop = !isLoop ? 0 : isLoop - 1;
+        //    break;
+        //case 0xF8:      /*  RET_M   */
+        //    if (R->AF.B.l & S_FLAG)isLoop = !isLoop ? 0 : isLoop - 1;
+        //    break;
+        //case 0xC9:      /*  RET     */
+        //    isLoop = !isLoop ? 0 : isLoop - 1;
+        //    break;
+        //case 0xC7:      /*  RST00   */
+        //case 0xCF:      /*  RST08   */
+        //case 0xD7:      /*  RST10   */
+        //case 0xDF:      /*  RST18   */
+        //case 0xE7:      /*  RST20   */
+        //case 0xEF:      /*  RST28   */
+        //case 0xF7:      /*  RST30   */
+        //case 0xFF:      /*  RST38   */
+        //    isLoop = 0;
+        //    break;
+        //default:
+        //    break;
+        //}
+        //if(!isLoop)break;
+    }
+}
 #endif // DEBUGGER_3DS
 
