@@ -6646,6 +6646,40 @@ byte ChangeDiskWithFormat(byte N, const char* FileName, int Format)
 }
 
 
+#ifdef HFE_DISK
+byte ChangeHFE_DiskWithFormat(byte N, const char* FileName, int Format)
+{
+    int NeedState;
+
+    /* We only have MAXDRIVES drives */
+    if (N >= MAXDRIVES) return(0);
+
+    /* Load state when inserting first disk into drive A: */
+    NeedState = FileName && *FileName && !N && !FDD[N].Data;
+
+    /* Reset FDC, in case it was running a command */
+    Reset1793(&FDC, FDD, WD1793_KEEP);
+
+#ifdef UPD_FDC
+    if (MODEL(MSX_MSXTR))ResetTC8566AF(&TCFDC, FDD, TC8566AF_KEEP);
+#endif // UPD_FDC
+
+        /* If FileName not empty, try loading disk image */
+    if (*FileName && loadHFE_File(N, FileName))
+    {
+        /* If first disk, also try loading state */
+        if (NeedState) FindState(FileName);
+#ifdef UPD_FDC
+        DiskChanged[N] = 1;
+#endif // UPD_FDC
+        /* Done */
+        return(1);
+    }
+}
+#endif // HFE_DISK
+
+
+
 void SetNonMegaROM(byte Slot)
 {
     byte PS, SS, * P, ROM64;
