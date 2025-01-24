@@ -86,27 +86,27 @@ unsigned char ReadTC8566AF(register TC8566AF* D, register unsigned char A)
                 }
                 else if (D->SectorOffset < 512)
                 {
-                    if (isLoadDer)
-                    {
-                        int J = D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors * (D->CurrTrack * D->Disk[D->Drive]->Sides + D->Side);
-                        if (derBuf[J >> 3] & (0x80 >> (J & 0x07)))
-                        {
-                            if (Verbose) printf("TC8566AF: ERROR Sector %d (Copy Protected)\n", J);
-                            D->Status[0] |= 0x40;   /* 0x40:IC(Interrupt Code) */
-                            D->Status[1] |= 0x20;   /* 0x20:DE(Data Error) */
-                            D->Status[2] |= 0x20;   /* 0x20:DD(Data Error in Data Field ) */
-                            D->Phase = PHASE_RESULT;
-                            D->PhaseStep = 0;
-                            D->SectorOffset = 0;
-                            return retval;
-                        }
-                    }
-
                     /* Read data */
                     retval = D->Ptr[D->SectorOffset];
                     D->SectorOffset++;
                     if (D->SectorOffset == 512)
                     {
+                        if (isLoadDer)
+                        {
+                            int J = D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors * (D->CurrTrack * D->Disk[D->Drive]->Sides + D->Side);
+                            if (derBuf[J >> 3] & (0x80 >> (J & 0x07)))
+                            {
+                                if (Verbose) printf("TC8566AF: ERROR Sector %d (Copy Protected)\n", J);
+                                D->Status[0] |= 0x40;   /* 0x40:IC(Interrupt Code) */
+                                D->Status[1] |= 0x20;   /* 0x20:DE(Data Error) */
+                                D->Status[2] |= 0x20;   /* 0x20:DD(Data Error in Data Field ) */
+                                D->Phase = PHASE_RESULT;
+                                D->PhaseStep = 0;
+                                D->SectorOffset = 0;
+                                D->MainStatus &= 0x7F;
+                                return retval;
+                            }
+                        }
                         if (D->Verbose) printf("TC8566AF: DONE reading data\n");
                         D->Phase = PHASE_RESULT;
                         D->PhaseStep = 0;
