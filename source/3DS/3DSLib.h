@@ -86,6 +86,11 @@ extern unsigned char MSX0_ANALOGOUT;
 //extern unsigned char MSX0_UART;
 #endif // _MSX0
 
+#ifdef HFE_DISK
+unsigned char loadHFE_File(int slotid, const char* filename);
+unsigned short GetHfeShiftedVal(unsigned char val0, unsigned char val1, unsigned char val2, unsigned char val3, int shiftv);
+#endif // HFE_DISK
+
 #ifdef VDP_V9990
 extern unsigned char UseV9990;
 extern unsigned char V9990Active;

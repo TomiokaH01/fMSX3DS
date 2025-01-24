@@ -602,8 +602,8 @@ void Init3DS()
 	//Verbose = 0x20;
 	//Verbose = 0xA0;
 	//Verbose = 0x44;
-	Verbose = 9;
-	//Verbose = 4;
+	//Verbose = 9;
+	Verbose = 4;
 #endif // DEBUG_LOG
 }
 
@@ -1061,6 +1061,24 @@ void BrowseROM(int slotid, int browsetype)
 					loadDerFile(cfstring.c_str());
 					return;
 				}
+#ifdef HFE_DISK
+				else if(strcasecmp(extname, ".HFE") == 0)
+				{
+					AutoSaveDisk(slotid);
+					std::string currstr = getZipSaveDiskPath(cfstring, extname);
+					std::string savestr;
+					savestr = cfstring;
+					struct stat buf;
+					if (stat(currstr.c_str(), &buf) == 0)cfstring = currstr;
+					if(ChangeHFE_DiskWithFormat(slotid, cfstring.c_str(), FMT_MSXDSK))
+					{
+						DiskStr[slotid] = currstr;
+						DiskRawStr[slotid] = cfstring;
+						AddRecentlyList(savestr, ".HFE");
+					}
+					return;
+				}
+#endif // HFE_DISK
 			}
 			if (currdir == "" || currdir == "/")
 			{
@@ -1335,6 +1353,9 @@ const char* BrowseZip(const char* path, const char* extchar)
 			if (extchar == NULL)
 			{
 				if (strcasecmp(ext, ".ROM") == 0 || strcasecmp(ext, ".DSK") == 0 || strcasecmp(ext, ".CAS") == 0 || strcasecmp(ext, ".MX1") == 0
+#ifdef HFE_DISK
+					|| strcasecmp(ext, ".HFE") == 0
+#endif // HFE_DISK
 					|| strcasecmp(ext, ".MX2") == 0 || strcasecmp(ext, ".IPS") == 0)
 				{
 					zipstrvec.push_back(filestr);
@@ -1452,6 +1473,10 @@ void BrowseLoadRecently(int slotid, int browsetype)
 		const char* extchr = recentftypelist[i].c_str();
 		if ((strcasecmp(extchr, ".ROM") == 0 && (browsetype & BROWSE_ROM)) || (strcasecmp(extchr,".MX1")==0 && (browsetype & BROWSE_ROM))
 			|| (strcasecmp(extchr,".MX2")==0 && (browsetype & BROWSE_ROM)) || (strcasecmp(extchr, ".DSK") == 0 && (browsetype & BROWSE_DISK))
+#ifdef HFE_DISK
+			|| (strcasecmp(extchr, ".HFE") == 0 && (browsetype & BROWSE_DISK))
+#endif // HFE_DISK
+
 			|| (strcasecmp(extchr, ".CAS") == 0 && (browsetype & BROWSE_TAPE)))
 		{
 			recentmenulist.push_back(recentlylist[i]);
@@ -1733,6 +1758,25 @@ void BrowseLoadRecently(int slotid, int browsetype)
 #endif // LOG_ERROR
 						}
 					}
+#ifdef HFE_DISK
+					else if(strcasecmp(extname, ".HFE") == 0)
+					{
+						AutoSaveDisk(slotid);
+						std::string currstr = getZipSaveDiskPath(cfstring, extname);
+						std::string savestr;
+						savestr = cfstring;
+						struct stat buf;
+						if (stat(currstr.c_str(), &buf) == 0)cfstring = currstr;
+						if (ChangeHFE_DiskWithFormat(slotid, cfstring.c_str(), FMT_MSXDSK))
+						{
+							DiskStr[slotid] = currstr;
+							DiskRawStr[slotid] = cfstring;
+							AddRecentlyList(savestr, ".HFE");
+						}
+						return;
+					}
+#endif // HFE_DISK
+
 					else if (strcasecmp(extname, ".CAS") == 0)
 					{
 						if (CASStr != cfstring || zipfileStr.length() > 0)
@@ -3119,6 +3163,9 @@ int OpenDirectoryDir(std::string dirstr, int browsetype)
 #if defined(HDD_NEXTOR) || defined(HDD_IDE) || defined(MEGASCSI_HD)
 					(strcasecmp(extname, ".DSK") == 0 && (browsetype & BROWSE_HDD)) ||
 #endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
+#ifdef HFE_DISK
+					(strcasecmp(extname, ".HFE") == 0 && (browsetype & BROWSE_DISK)) ||
+#endif // HFE_DISK
 					(strcasecmp(extname, ".CAS") == 0 && (browsetype & BROWSE_TAPE)) ||
 					(strcasecmp(extname, ".IPS") == 0 && (browsetype & BROWSE_PATCH)) ||
 					((strcasecmp(extname, ".MCF") == 0 || strcasecmp(extname, ".CHT") == 0) && (browsetype & BROWSE_CHEAT)) ||

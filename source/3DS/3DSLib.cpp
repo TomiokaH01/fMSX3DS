@@ -2983,6 +2983,10 @@ FILE* zipfopen(const char* _name, const char* _mode)
 			/* Maybe mistaken. but i test it many times and works in all of the case, so i leave it. */
 			/* Use if(std::string(ext) == ".ROM") etc. to fix. */
 			if (strcasecmp(ext, ".ROM") == 0 || strcasecmp(ext, ".DSK") == 0 || strcasecmp(ext, ".CAS") == 0 || strcasecmp(ext, ".MX1") == 0
+#ifdef HFE_DISK
+				|| strcasecmp(ext, ".HFE") == 0
+#endif // HFE_DISK
+
 				|| strcasecmp(ext, ".MX2") == 0 || strcasecmp(ext, ".IPS") == 0)
 			{
 				if (i == ZipIndex || ZipIndex < 0)
@@ -3494,6 +3498,416 @@ void ChangeScreenImposeTransparent(int alpha)
 	C3DTextureChangeAlpha(ScreenTexImpose, alpha);
 }
 #endif // SUPERIMPOSE
+
+
+#ifdef HFE_DISK
+unsigned short CRC16Table[256] = {
+	0x0000, 0x1021, 0x2042, 0x3063, 0x4084, 0x50A5, 0x60C6, 0x70E7,
+	0x8108, 0x9129, 0xA14A, 0xB16B, 0xC18C, 0xD1AD, 0xE1CE, 0xF1EF,
+	0x1231, 0x0210, 0x3273, 0x2252, 0x52B5, 0x4294, 0x72F7, 0x62D6,
+	0x9339, 0x8318, 0xB37B, 0xA35A, 0xD3BD, 0xC39C, 0xF3FF, 0xE3DE,
+	0x2462, 0x3443, 0x0420, 0x1401, 0x64E6, 0x74C7, 0x44A4, 0x5485,
+	0xA56A, 0xB54B, 0x8528, 0x9509, 0xE5EE, 0xF5CF, 0xC5AC, 0xD58D,
+	0x3653, 0x2672, 0x1611, 0x0630, 0x76D7, 0x66F6, 0x5695, 0x46B4,
+	0xB75B, 0xA77A, 0x9719, 0x8738, 0xF7DF, 0xE7FE, 0xD79D, 0xC7BC,
+
+	0x48C4, 0x58E5, 0x6886, 0x78A7, 0x0840, 0x1861, 0x2802, 0x3823,
+	0xC9CC, 0xD9ED, 0xE98E, 0xF9AF, 0x8948, 0x9969, 0xA90A, 0xB92B,
+	0x5AF5, 0x4AD4, 0x7AB7, 0x6A96, 0x1A71, 0x0A50, 0x3A33, 0x2A12,
+	0xDBFD, 0xCBDC, 0xFBBF, 0xEB9E, 0x9B79, 0x8B58, 0xBB3B, 0xAB1A,
+	0x6CA6, 0x7C87, 0x4CE4, 0x5CC5, 0x2C22, 0x3C03, 0x0C60, 0x1C41,
+	0xEDAE, 0xFD8F, 0xCDEC, 0xDDCD, 0xAD2A, 0xBD0B, 0x8D68, 0x9D49,
+	0x7E97, 0x6EB6, 0x5ED5, 0x4EF4, 0x3E13, 0x2E32, 0x1E51, 0x0E70,
+	0xFF9F, 0xEFBE, 0xDFDD, 0xCFFC, 0xBF1B, 0xAF3A, 0x9F59, 0x8F78,
+
+	0x9188, 0x81A9, 0xB1CA, 0xA1EB, 0xD10C, 0xC12D, 0xF14E, 0xE16F,
+	0x1080, 0x00A1, 0x30C2, 0x20E3, 0x5004, 0x4025, 0x7046, 0x6067,
+	0x83B9, 0x9398, 0xA3FB, 0xB3DA, 0xC33D, 0xD31C, 0xE37F, 0xF35E,
+	0x02B1, 0x1290, 0x22F3, 0x32D2, 0x4235, 0x5214, 0x6277, 0x7256,
+	0xB5EA, 0xA5CB, 0x95A8, 0x8589, 0xF56E, 0xE54F, 0xD52C, 0xC50D,
+	0x34E2, 0x24C3, 0x14A0, 0x0481, 0x7466, 0x6447, 0x5424, 0x4405,
+	0xA7DB, 0xB7FA, 0x8799, 0x97B8, 0xE75F, 0xF77E, 0xC71D, 0xD73C,
+	0x26D3, 0x36F2, 0x0691, 0x16B0, 0x6657, 0x7676, 0x4615, 0x5634,
+
+	0xD94C, 0xC96D, 0xF90E, 0xE92F, 0x99C8, 0x89E9, 0xB98A, 0xA9AB,
+	0x5844, 0x4865, 0x7806, 0x6827, 0x18C0, 0x08E1, 0x3882, 0x28A3,
+	0xCB7D, 0xDB5C, 0xEB3F, 0xFB1E, 0x8BF9, 0x9BD8, 0xABBB, 0xBB9A,
+	0x4A75, 0x5A54, 0x6A37, 0x7A16, 0x0AF1, 0x1AD0, 0x2AB3, 0x3A92,
+	0xFD2E, 0xED0F, 0xDD6C, 0xCD4D, 0xBDAA, 0xAD8B, 0x9DE8, 0x8DC9,
+	0x7C26, 0x6C07, 0x5C64, 0x4C45, 0x3CA2, 0x2C83, 0x1CE0, 0x0CC1,
+	0xEF1F, 0xFF3E, 0xCF5D, 0xDF7C, 0xAF9B, 0xBFBA, 0x8FD9, 0x9FF8,
+	0x6E17, 0x7E36, 0x4E55, 0x5E74, 0x2E93, 0x3EB2, 0x0ED1, 0x1EF0,
+};
+
+/* Add support for HFE HxC Floppy Emulator file format. */
+/* https://hxc2001.com/floppy_drive_emulator/HFE-file-format.html */
+/* Based on infomation from */
+/* https://middleriver.chagasi.com/electronics/fddemu.html */
+byte loadHFE_File(int slotid, const char* filename)
+{
+	FILE* hfeFile;
+	byte* hfeBuf, * P;
+	byte buf0, buf1, buf2, buf3, buf4, buf5, bufp0, bufp1, bufp2, bufp3, cdata, cdata0, cdata1;
+	word wdata;
+	int hfesize;
+	hfeFile = zipfopen(filename, "rb");
+	if (!hfeFile)return(0);
+	fseek(hfeFile, 0, SEEK_END);
+	hfesize = ftell(hfeFile);
+	hfeBuf = ResizeMemory(hfeBuf, hfesize);
+	rewind(hfeFile);
+	fread(hfeBuf, 1, hfesize, hfeFile);
+	byte* currBuf = hfeBuf + 0x400;
+	byte* startBuf = hfeBuf + 0x400;
+	byte* dataBuf = (byte*)malloc(hfesize / 2);
+	byte* currDataBuf = dataBuf + 0;
+	int dataRecCount = 0;
+	int idxRecCount = 0;
+	uint16_t offsets[82];
+	uint16_t track_lens[82];
+	byte* pictrackBuf = hfeBuf + 0x200;
+	word checkWord = 0;
+	int currShifted = 0;
+	int sectorSkipped = 0;
+	bool trackHasData = false;
+	bool IsSectorHasData = false;
+	int recordCount = 0;
+	int headerCount = 0;
+	int trackCount = 0;
+	int currSector = 0;
+	int sectorSum = 0;
+	int oldSecorSum = 0;
+	int oldC;
+	int oldH;
+	int oldR;
+	byte sectorInfos[8];	/* [0:C]  [1:H]  [2:R]  [3:N]  [4:old C]  [5:old H]  [6:old R]  [7:old N] */
+	uint16_t calcCRC = 0;
+	uint16_t idxcrc = 0;
+	uint16_t dataCRC = 0;
+	bool isErrorCRC = false;
+	if (derBuf == NULL)derBuf = (unsigned char*)malloc(200);
+	else derBuf = (unsigned char*)realloc(derBuf, 200);
+	memset(derBuf, 0, 200);
+	for (int i = 0; i < 82; i++)
+	{
+		offsets[i] = ((uint16_t)pictrackBuf[(i << 2) + 1] << 8) | (uint16_t)pictrackBuf[i << 2];
+		track_lens[i] = ((uint16_t)pictrackBuf[(i << 2) + 3] << 8) | (uint16_t)pictrackBuf[(i << 2) + 2];
+	}
+
+	for (int g = 0; g < 82; g++)
+	{
+		if ((offsets[g] == 0) || (track_lens[g] == 0))break;
+		//if (Verbose&0x04)printf("offset[%02Xh]  len[%02Xh]\n", offsets[g], track_lens[g]);
+		/* h==0->Side 0,  h==1->Side 1 */
+		for (int h = 0; h < 2; h++)
+		{
+			//if (Verbose & 0x04)printf("Track[%d]  Side[%d]\n", g, h);
+			currBuf = startBuf = hfeBuf + (((int)offsets[g] * 0x200) + (h * 0x100) + 0x200);
+			currShifted = 0;
+			currSector = 0;
+			//if (!dataRecCount)trackHasData = false;
+			//if (Verbose & 0x04)printf("Addr: %d\n", (((int)offsets[g] * 0x200) + (h * 0x100) + 0x200));
+			while ((int)(currBuf - startBuf) < track_lens[g])
+			{
+				currSector++;
+				for (int i = 0; i < 256; i += 2, currBuf += 2)
+				{
+					if ((int)(currBuf - hfeBuf) >= hfesize - 260)break;
+					/* Convert RAW MFM encoded value to data. */
+					buf0 = currBuf[0];
+					buf1 = i >= 255 ? currBuf[257] : currBuf[1];
+					buf2 = i >= 254 ? currBuf[258] : currBuf[2];
+					buf3 = i >= 253 ? currBuf[259] : currBuf[3];
+					wdata = GetHfeShiftedVal(buf0, buf1, buf2, buf3, currShifted);
+					cdata0 = wdata >> 8;
+					cdata1 = wdata & 0xFF;
+					/* Convert to LSB data. */
+					/* Ignore Odd bit(clock bit). */
+					cdata = ((cdata0 & 0x01) << 7) | ((cdata0 & 0x04) << 4) | ((cdata0 & 0x10) << 1) | ((cdata0 & 0x40) >> 2)
+						| ((cdata1 & 0x01) << 3) | (cdata1 & 0x04) | ((cdata1 & 0x10) >> 3) | ((cdata1 & 0x40) >> 6);
+
+					if (dataRecCount)
+					{
+						dataRecCount--;
+						switch (dataRecCount)
+						{
+						case 0:
+							dataCRC |= cdata;
+							if (calcCRC != dataCRC)
+							{
+								isErrorCRC = true;
+								sectorSum = (sectorInfos[2] - 1 + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
+								if ((sectorSum >> 3) <= 200)
+								{
+									derBuf[sectorSum >> 3] |= (0x80 >> (sectorSum & 0x07));
+									if (Verbose & 0x04)printf("Data CRC Error in Sector[%d] : CalcCRC[%04Xh]  DataCRC[%04Xh]\n"
+										, sectorSum, calcCRC, dataCRC);
+								}
+							}
+							else sectorSum++;
+							break;
+						case 1:
+							dataCRC  = cdata << 8;
+							break;
+						default:
+							currDataBuf[0] = cdata;
+							currDataBuf++;
+							calcCRC = (Uint16)((calcCRC << 8) ^ CRC16Table[(byte)(calcCRC >> 8) ^ cdata]);
+							break;
+						}
+						continue;
+					}
+					if (idxRecCount)
+					{
+						switch (6 - idxRecCount)
+						{
+						case 0:	/* C */
+							sectorInfos[0] = cdata;
+							if ((cdata >= trackCount) && (cdata <= 82))trackCount = cdata;
+							calcCRC = (Uint16)((calcCRC << 8) ^ CRC16Table[(byte)(calcCRC >> 8) ^ cdata]);
+							if ((cdata != oldC + 1) && (cdata != 0) && (cdata!=1) && (cdata != oldC))
+							{
+								if (Verbose & 0x04)printf("Wrong Cylinder Num[%d] oldC[]%D in Sector[%d]\n", cdata, oldC, sectorSum);
+							}
+							oldC = cdata;
+							if ((Verbose & 0x04) && (cdata>=83))printf("Wrong Cylinder Num[%d] in Sector[%d]\n", cdata, sectorSum);
+							//if (Verbose & 0x04)printf("Cylinder Num[%d]", cdata);
+							break;
+						case 1:	/* H */
+							sectorInfos[1] = cdata;
+							calcCRC = (Uint16)((calcCRC << 8) ^ CRC16Table[(byte)(calcCRC >> 8) ^ cdata]);
+							if (cdata == 0x01)headerCount = 1;
+							if ((Verbose & 0x04) && (cdata>=2))printf("Wrong Header Num[%d] in Sector[%d]\n", cdata, sectorSum);
+							//if (Verbose & 0x04)printf(" Header Num[%d]", cdata);
+							break;
+						case 2:	/* R */
+							sectorInfos[2] = cdata;
+							if((cdata>=recordCount) && (cdata<=9))recordCount = cdata;
+							calcCRC = (Uint16)((calcCRC << 8) ^ CRC16Table[(byte)(calcCRC >> 8) ^ cdata]);
+							if ((cdata == oldR) && (sectorSum!=0))
+							{
+								if(Verbose & 0x04)printf("Multi sector[%d] in Sector[%d]\n", cdata, sectorSum);
+							}
+							//if ((cdata != oldR + 1) && (cdata != 0) &&(cdata!=1) && (cdata != oldR))
+							if ((cdata != oldR + 1) && (cdata != 0) && (cdata != 1) && (cdata != oldR) && (cdata!=255) && (oldR!=255))
+							{
+								// /* sectorInfos[2] - 1:current R value, sectorInfos[2] - 2:previous R value   */
+								///sectorSum = (sectorInfos[2] - 2 + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
+
+								if ((sectorSum >> 3) <= 200)
+								{
+									derBuf[sectorSum >> 3] |= (0x80 >> (sectorSum & 0x07));
+									isErrorCRC = true;
+								}
+
+								//if (cdata == oldR + 2) currDataBuf += 512;
+								//if (cdata == oldR + 2) sectorSkipped ++;
+								//if (cdata > oldR)
+								//{
+								//	isErrorCRC = true;
+								//	for (int j = oldR + 1; j < cdata; j++)
+								//	{
+								//		sectorSum = (j - 1 + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
+								//		derBuf[sectorSum >> 3] |= (0x80 >> (sectorSum & 0x07));
+								//	}
+								//}
+								if (Verbose & 0x04)printf("Wrong Record Num[%d] oldR[%d] in Sector[%d]\n", cdata, oldR, sectorSum);
+							}
+							oldR = cdata;
+							//if (Verbose & 0x04)printf(" Record Num[%d] in Sector[%d] calced Sector[%D]\n", cdata, sectorSum,
+							//	sectorInfos[2] - 1 + sectorSkipped + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
+							//if ((Verbose & 0x04) && (cdata>=10))printf("Wrong Record Num[%d] in Sector[%d]\n", cdata, sectorSum);
+							break;
+						case 3:	/* N */
+							sectorInfos[3] = cdata;
+							calcCRC = (Uint16)((calcCRC << 8) ^ CRC16Table[(byte)(calcCRC >> 8) ^ cdata]);
+							if ((Verbose & 0x04) && (cdata!=2))printf("Wrong Sector Size[%d] in Sector[%d]\n", cdata, sectorSum);
+							break;
+						case 4:	/* ID Mark CRC */
+							idxcrc = cdata<<8;
+							break;
+						case 5:	/* ID Mark CRC */
+							idxcrc |= cdata;
+							if (calcCRC != idxcrc)
+							{
+								isErrorCRC = true;
+								sectorSum = (sectorInfos[2] - 1  + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
+								if ((sectorSum >> 3) <= 200)
+								{
+									derBuf[sectorSum >> 3] |= (0x80 >> (sectorSum & 0x07));
+									if (Verbose & 0x04)printf("ID Mark CRC Error in Sector[%d] : CalcCRC[%04Xh]  IdMarkCRC[%04Xh]\n"
+										, sectorSum, calcCRC, idxcrc);
+								}
+							}
+							if ((!IsSectorHasData) && (sectorSum>=2))
+							{
+								if (Verbose & 0x04)printf("SkipData in sector[%d]", sectorSum);
+							}
+							IsSectorHasData = false;
+							break;
+						default:
+							break;
+						}
+						idxRecCount--;
+						continue;
+					}
+
+					/* 0xA1 with missing clock bit to detect Address Mark(ID Address Mark or Data Address Mark) */
+					/* Detect data shift, and fix that. */
+					if ((int)(currBuf - hfeBuf) < hfesize - 260)
+					{
+						buf4 = i >= 252 ? currBuf[260] : currBuf[4];
+						for (int j = 0; j < 16; j++)
+						{
+							checkWord = GetHfeShiftedVal(buf0, buf1, buf2, buf3, j);
+							/* data "0xA1" with missing clock */	/* 0x9148(LSB) == 0x4489(MSB) */
+							if (checkWord == 0x9148)
+							{
+								buf5 = i >= 251 ? currBuf[261] : currBuf[5];
+								checkWord = GetHfeShiftedVal(buf2, buf3, buf4, buf5, j);
+								if (checkWord == 0x9148)
+								{
+									//if (Verbose & 0x08)
+									//{
+									//	if (currShifted != j)printf("currShift[%d] ", j);
+									//}
+									currShifted = j;
+									break;
+								}
+							}
+						}
+					}
+					if ((cdata == 0xF8) || (cdata == 0xFB) || (cdata == 0xFE))
+					{
+						//buf1 = i >= 255 ? currBuf[257] : currBuf[1];
+						bufp0 = i >= 4 ? currBuf[-4] : currBuf[-260];
+						bufp1 = i >= 3 ? currBuf[-3] : currBuf[-259];
+						bufp2 = i >= 2 ? currBuf[-2] : currBuf[-258];
+						bufp3 = i >= 1 ? currBuf[-1] : currBuf[-257];
+						if (cdata == 0xF8)	/* Start Deleted data */
+						{
+							/* data "0xA1" with missing clock */	/* 0x9148(LSB) == 0x4489(MSB) */
+							//if (GetHfeShiftedVal(currBuf[-4], currBuf[-3], currBuf[-2], currBuf[-1], currShifted) == 0x9148)
+							if (GetHfeShiftedVal(bufp0, bufp1, bufp2, bufp3, currShifted) == 0x9148)
+							{
+								if (Verbose & 0x04)printf("Deleted Data\n");
+							}
+						}
+						if (cdata == 0xFB)	/* Start Data */
+						{
+							/* data "0xA1" with missing clock */	/* 0x9148(LSB) == 0x4489(MSB) */
+							//if (GetHfeShiftedVal(currBuf[-4], currBuf[-3], currBuf[-2], currBuf[-1], currShifted) == 0x9148)
+							if (GetHfeShiftedVal(bufp0, bufp1, bufp2, bufp3, currShifted) == 0x9148)
+							{
+								dataRecCount = 512 + 2;		/* Data:512byte,  CRC of data:2byte */
+								trackHasData = true;
+								/* Start Calculate CRC for data here */
+								calcCRC = 0xFFFF;
+								calcCRC = 0xFFFF;
+								for (int j = 0; j < 3; j++)
+								{
+									calcCRC = (Uint16)((calcCRC << 8) ^ CRC16Table[(byte)(calcCRC >> 8) ^ 0xA1]);
+								}
+								calcCRC = (Uint16)((calcCRC << 8) ^ CRC16Table[(byte)(calcCRC >> 8) ^ 0xFB]);
+								//if (sectorInfos[2] > 9)sectorInfos[2] = oldR >= 9 ? 1 : oldR + 1;
+								if ((sectorInfos[0] <= 82) && (sectorInfos[1] <= 1) && (sectorInfos[2] <= 9))
+								{
+									sectorSum = (sectorInfos[2] - 1 + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
+									if ((sectorSum != oldSecorSum) && (sectorSum*512<hfesize/2))
+									{
+										currDataBuf = dataBuf + (sectorSum * 512);
+										IsSectorHasData = true;
+									}
+									else
+									{
+										if ((Verbose & 0x04) && (sectorSum!=0))printf("Multi sector[%d] in Sector[%d]\n", sectorInfos[2], sectorSum);
+									}
+									oldSecorSum = sectorSum;
+
+									//currDataBuf = dataBuf + ((sectorInfos[2] - 1 + sectorSkipped
+									//	+ (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1]))) * 512);
+
+								// //currDataBuf = dataBuf + ((sectorInfos[2] - 1 - sectorSkipped +
+								// //	(recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1]))) * 512);
+								}
+								// //int J = D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors * (D->CurrTrack * D->Disk[D->Drive]->Sides + D->Side);
+							}
+						}
+
+						if (cdata == 0xFE) /* Start ID Address Mark */
+						{
+							//if (GetHfeShiftedVal(currBuf[-4], currBuf[-3], currBuf[-2], currBuf[-1], currShifted) == 0x9148)
+							if (GetHfeShiftedVal(bufp0, bufp1, bufp2, bufp3, currShifted) == 0x9148)
+							{
+								idxRecCount = 6;
+								/* Calculate CRC for header here. */
+								calcCRC = 0xFFFF;
+								for (int j = 0; j < 3; j++)
+								{
+									calcCRC = (Uint16)((calcCRC << 8) ^ CRC16Table[(byte)(calcCRC >> 8) ^ 0xA1]);
+								}
+								calcCRC = (Uint16)((calcCRC << 8) ^ CRC16Table[(byte)(calcCRC >> 8) ^ 0xFE]);
+							}
+						}
+					}
+				}
+				currBuf += 256;
+			}
+			//if (trackHasData)trackCount++;
+			//else
+			//{
+			//	if (Verbose & 0x04)printf("Record not found[%d]\n",sectorSum);
+			//}
+		}
+	}
+	//trackCount /= (headerCount + 1);
+	trackCount += 1;
+	if (Verbose & 0x04)
+	{
+		printf("HFE Disk Record[%d] Header[%d] Track[%d] Length[%08Xh]\n", recordCount, headerCount, trackCount,
+			recordCount * (headerCount + 1) * trackCount * 512);
+	}
+
+	if (!isErrorCRC)
+	{
+		free(derBuf);
+		derBuf = 0;
+		isLoadDer = 0;
+	}
+	else
+	{
+		isLoadDer = 1;
+	}
+
+	P = NewFDI(&FDD[slotid], headerCount+1, trackCount, recordCount, 512);
+	if (!P) { fclose(hfeFile); return(0); }
+	memcpy(P, dataBuf+0, recordCount * (headerCount + 1) * trackCount * 512 * sizeof(byte));
+	P = FDD[slotid].Data;
+	FDD[slotid].Data = P;
+	FDD[slotid].Format = FMT_MSXDSK;
+	fclose(hfeFile);
+
+	//FILE* writeFile;
+	//if (writeFile = fopen("/FMSX3DS/TEST.TXT", "wb"))
+	//{
+	//	fwrite(dataBuf, 1, hfesize / 2, writeFile);
+	//}
+	//fclose(writeFile);
+
+	linearFree(hfeBuf);
+	free(dataBuf);
+	return 1;
+}
+
+
+word GetHfeShiftedVal(byte val0, byte val1, byte val2, byte val3, int shiftv)
+{
+	uint checkWord;
+	checkWord = (((uint)val0 | ((uint)val1 << 8) | ((uint)val2 << 16) | ((uint)val3 << 24)) >> shiftv) & 0xFFFF;
+	return (checkWord >> 8 | ((checkWord & 0xFF) << 8));
+}
+
+#endif // HFE_DISK
 
 
 void InitXbuf()
