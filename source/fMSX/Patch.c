@@ -314,16 +314,6 @@ case 0x4010:
         OldStart = R->DE.W;
     }
 
-    /* RuMSX's ".der" file for copy protected disk. */
-    if (isLoadDer)
-    {
-        if (derBuf[R->DE.W >> 3] & (0x80 >> (R->DE.W & 0x07)))
-        {
-            if (Verbose & 0x04) printf("CRC Error Sector %d \n", R->DE.W);
-            R->AF.W = 0x0401; return;
-        }
-    }
-
     if (!DiskPresent(R->AF.B.h))
     {
         R->AF.W = 0x0201; return;
@@ -407,6 +397,16 @@ case 0x4010:
     //WrZ80(0xFCC6, OSSLReg[1]);
     //WrZ80(0xFCC7, OSSLReg[2]);
     //WrZ80(0xFCC8, OSSLReg[3]);
+
+        /* RuMSX's ".der" file for copy protected disk. */
+    if (isLoadDer)
+    {
+        if (derBuf[R->DE.W >> 3] & (0x80 >> (R->DE.W & 0x07)))
+        {
+            if (Verbose & 0x04) printf("CRC Error Sector %d \n", R->DE.W);
+            R->AF.W = 0x0401; return;
+        }
+    }
     
     /* Return "Success" */
     R->AF.B.l &= ~C_FLAG;
