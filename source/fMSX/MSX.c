@@ -6675,6 +6675,7 @@ byte ChangeHFE_DiskWithFormat(byte N, const char* FileName, int Format)
         /* Done */
         return(1);
     }
+    return (0);
 }
 #endif // HFE_DISK
 
