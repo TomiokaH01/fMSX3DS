@@ -1773,7 +1773,7 @@ void BrowseLoadRecently(int slotid, int browsetype)
 							DiskRawStr[slotid] = cfstring;
 							AddRecentlyList(savestr, ".HFE");
 						}
-						return;
+						else NotFound = true;
 					}
 #endif // HFE_DISK
 
