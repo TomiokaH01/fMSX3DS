@@ -401,10 +401,21 @@ case 0x4010:
         /* RuMSX's ".der" file for copy protected disk. */
     if (isLoadDer)
     {
-        if (derBuf[R->DE.W >> 3] & (0x80 >> (R->DE.W & 0x07)))
+        if (isLoadDer & 0x01)
         {
-            if (Verbose & 0x04) printf("CRC Error Sector %d \n", R->DE.W);
-            R->AF.W = 0x0401; return;
+            if (derBuf[R->DE.W >> 3] & (0x80 >> (R->DE.W & 0x07)))
+            {
+                if (Verbose & 0x04) printf("CRC Error Sector %d (Copy Protected)\n", R->DE.W);
+                R->AF.W = 0x0401; return;
+            }
+        }
+        if (isLoadDer & 0x02)
+        {
+            if (derBuf[(R->DE.W >> 3) + 200] & (0x80 >> (R->DE.W & 0x07)))
+            {
+                if (Verbose & 0x04) printf("Record not found in  Sector %d (Copy Protected)\n", R->DE.W);
+                R->AF.W = 0x0801; return;
+            }
         }
     }
     
