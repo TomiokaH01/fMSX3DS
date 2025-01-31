@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <3ds.h>
 #include<stdlib.h>
+#include <unordered_set>
 
 #include <citro2d.h>
 
@@ -163,6 +164,7 @@ bool isShellOpen = true;
 bool IsCapsReady = false;
 bool IsKanaReady = false;
 bool IsStart = true;
+
 
 /** CommonMux.h **********************************************/
 /** Display drivers for all possible screen depths.         **/
@@ -3543,6 +3545,8 @@ unsigned short CRC16Table[256] = {
 /* https://hxc2001.com/floppy_drive_emulator/HFE-file-format.html */
 /* Based on infomation from */
 /* https://middleriver.chagasi.com/electronics/fddemu.html */
+/* and infomation at MSX techenical guide book disk edition. */
+/* http://www.ascat.jp/tg/tgdindex.html */
 byte loadHFE_File(int slotid, const char* filename)
 {
 	FILE* hfeFile;
@@ -3574,27 +3578,25 @@ byte loadHFE_File(int slotid, const char* filename)
 	int recordCount = 0;
 	int headerCount = 0;
 	int trackCount = 0;
-	int currSector = 0;
 	int sectorSum = 0;
 	int oldSecorSum = 0;
 	int oldC;
-	int oldH;
-	int oldR;
 	byte sectorInfos[8];	/* [0:C]  [1:H]  [2:R]  [3:N]  [4:old C]  [5:old H]  [6:old R]  [7:old N] */
 	uint16_t calcCRC = 0;
 	uint16_t idxcrc = 0;
 	uint16_t dataCRC = 0;
-	bool isErrorCRC = false;
-	if (derBuf == NULL)derBuf = (unsigned char*)malloc(200);
-	else derBuf = (unsigned char*)realloc(derBuf, 200);
-	memset(derBuf, 0, 200);
-	for (int i = 0; i < 82; i++)
+	byte isCopyProtect = 0;
+	std::unordered_set<int> sectorSet;
+	if (derBuf == NULL)derBuf = (unsigned char*)malloc(380);
+	else derBuf = (unsigned char*)realloc(derBuf, 380);
+	memset(derBuf, 0, 380);
+	for (int i = 0; i < hfeBuf[9]; i++)
 	{
 		offsets[i] = ((uint16_t)pictrackBuf[(i << 2) + 1] << 8) | (uint16_t)pictrackBuf[i << 2];
 		track_lens[i] = ((uint16_t)pictrackBuf[(i << 2) + 3] << 8) | (uint16_t)pictrackBuf[(i << 2) + 2];
 	}
 
-	for (int g = 0; g < 82; g++)
+	for (int g = 0; g < hfeBuf[9]; g++)
 	{
 		if ((offsets[g] == 0) || (track_lens[g] == 0))break;
 		//if (Verbose&0x04)printf("offset[%02Xh]  len[%02Xh]\n", offsets[g], track_lens[g]);
@@ -3604,12 +3606,10 @@ byte loadHFE_File(int slotid, const char* filename)
 			//if (Verbose & 0x04)printf("Track[%d]  Side[%d]\n", g, h);
 			currBuf = startBuf = hfeBuf + (((int)offsets[g] * 0x200) + (h * 0x100) + 0x200);
 			currShifted = 0;
-			currSector = 0;
 			//if (!dataRecCount)trackHasData = false;
 			//if (Verbose & 0x04)printf("Addr: %d\n", (((int)offsets[g] * 0x200) + (h * 0x100) + 0x200));
 			while ((int)(currBuf - startBuf) < track_lens[g])
 			{
-				currSector++;
 				for (int i = 0; i < 256; i += 2, currBuf += 2)
 				{
 					if ((int)(currBuf - hfeBuf) >= hfesize - 260)break;
@@ -3635,7 +3635,7 @@ byte loadHFE_File(int slotid, const char* filename)
 							dataCRC |= cdata;
 							if (calcCRC != dataCRC)
 							{
-								isErrorCRC = true;
+								isCopyProtect |= 1;
 								sectorSum = (sectorInfos[2] - 1 + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
 								if ((sectorSum >> 3) <= 200)
 								{
@@ -3667,7 +3667,7 @@ byte loadHFE_File(int slotid, const char* filename)
 							calcCRC = (Uint16)((calcCRC << 8) ^ CRC16Table[(byte)(calcCRC >> 8) ^ cdata]);
 							if ((cdata != oldC + 1) && (cdata != 0) && (cdata!=1) && (cdata != oldC))
 							{
-								if (Verbose & 0x04)printf("Wrong Cylinder Num[%d] oldC[]%D in Sector[%d]\n", cdata, oldC, sectorSum);
+								if (Verbose & 0x04)printf("Wrong Cylinder Num[%d] oldC[%d] in Sector[%d]\n", cdata, oldC, sectorSum);
 							}
 							oldC = cdata;
 							if ((Verbose & 0x04) && (cdata>=83))printf("Wrong Cylinder Num[%d] in Sector[%d]\n", cdata, sectorSum);
@@ -3682,41 +3682,15 @@ byte loadHFE_File(int slotid, const char* filename)
 							break;
 						case 2:	/* R */
 							sectorInfos[2] = cdata;
-							if((cdata>=recordCount) && (cdata<=9))recordCount = cdata;
+							if ((cdata >= recordCount) && (cdata <= 9))recordCount = cdata;
+							sectorSum = (sectorInfos[2] - 1 + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
+							if (sectorSet.count(sectorSum))
+							{
+								if (Verbose & 0x04)printf("Multi sector in Sector[%d]\n", sectorSum);
+							}
+							else sectorSet.insert(sectorSum);
+							//if (Verbose & 0x04)printf(" Record Num[%d]  Sector[%d]\n", cdata, sectorSum);
 							calcCRC = (Uint16)((calcCRC << 8) ^ CRC16Table[(byte)(calcCRC >> 8) ^ cdata]);
-							if ((cdata == oldR) && (sectorSum!=0))
-							{
-								if(Verbose & 0x04)printf("Multi sector[%d] in Sector[%d]\n", cdata, sectorSum);
-							}
-							//if ((cdata != oldR + 1) && (cdata != 0) &&(cdata!=1) && (cdata != oldR))
-							if ((cdata != oldR + 1) && (cdata != 0) && (cdata != 1) && (cdata != oldR) && (cdata!=255) && (oldR!=255))
-							{
-								// /* sectorInfos[2] - 1:current R value, sectorInfos[2] - 2:previous R value   */
-								///sectorSum = (sectorInfos[2] - 2 + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
-
-								if ((sectorSum >> 3) <= 200)
-								{
-									derBuf[sectorSum >> 3] |= (0x80 >> (sectorSum & 0x07));
-									isErrorCRC = true;
-								}
-
-								//if (cdata == oldR + 2) currDataBuf += 512;
-								//if (cdata == oldR + 2) sectorSkipped ++;
-								//if (cdata > oldR)
-								//{
-								//	isErrorCRC = true;
-								//	for (int j = oldR + 1; j < cdata; j++)
-								//	{
-								//		sectorSum = (j - 1 + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
-								//		derBuf[sectorSum >> 3] |= (0x80 >> (sectorSum & 0x07));
-								//	}
-								//}
-								if (Verbose & 0x04)printf("Wrong Record Num[%d] oldR[%d] in Sector[%d]\n", cdata, oldR, sectorSum);
-							}
-							oldR = cdata;
-							//if (Verbose & 0x04)printf(" Record Num[%d] in Sector[%d] calced Sector[%D]\n", cdata, sectorSum,
-							//	sectorInfos[2] - 1 + sectorSkipped + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
-							//if ((Verbose & 0x04) && (cdata>=10))printf("Wrong Record Num[%d] in Sector[%d]\n", cdata, sectorSum);
 							break;
 						case 3:	/* N */
 							sectorInfos[3] = cdata;
@@ -3730,18 +3704,18 @@ byte loadHFE_File(int slotid, const char* filename)
 							idxcrc |= cdata;
 							if (calcCRC != idxcrc)
 							{
-								isErrorCRC = true;
-								sectorSum = (sectorInfos[2] - 1  + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
-								if ((sectorSum >> 3) <= 200)
-								{
-									derBuf[sectorSum >> 3] |= (0x80 >> (sectorSum & 0x07));
+								//isErrorCRC |= 1;
+								//sectorSum = (sectorInfos[2] - 1  + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
+								//if ((sectorSum >> 3) <= 200)
+								//{
+								//	derBuf[sectorSum >> 3] |= (0x80 >> (sectorSum & 0x07));
 									if (Verbose & 0x04)printf("ID Mark CRC Error in Sector[%d] : CalcCRC[%04Xh]  IdMarkCRC[%04Xh]\n"
 										, sectorSum, calcCRC, idxcrc);
-								}
+								//}
 							}
 							if ((!IsSectorHasData) && (sectorSum>=2))
 							{
-								if (Verbose & 0x04)printf("SkipData in sector[%d]", sectorSum);
+								if (Verbose & 0x04)printf("SkipData in sector[%d]\n", sectorSum);
 							}
 							IsSectorHasData = false;
 							break;
@@ -3813,7 +3787,7 @@ byte loadHFE_File(int slotid, const char* filename)
 								if ((sectorInfos[0] <= 82) && (sectorInfos[1] <= 1) && (sectorInfos[2] <= 9))
 								{
 									sectorSum = (sectorInfos[2] - 1 + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
-									if ((sectorSum != oldSecorSum) && (sectorSum*512<hfesize/2))
+									if ((sectorSum != oldSecorSum) && (sectorSum*512 + 512 <hfesize/2))
 									{
 										currDataBuf = dataBuf + (sectorSum * 512);
 										IsSectorHasData = true;
@@ -3867,8 +3841,24 @@ byte loadHFE_File(int slotid, const char* filename)
 		printf("HFE Disk Record[%d] Header[%d] Track[%d] Length[%08Xh]\n", recordCount, headerCount, trackCount,
 			recordCount * (headerCount + 1) * trackCount * 512);
 	}
+	sectorSum = recordCount * (headerCount + 1) * trackCount;
+	for (int i = 0; i < sectorSum; i++)
+	{
+		if (!sectorSet.count(i))
+		{
+			if (Verbose & 0x04)printf("Record not found in Sector[%d]\n", i);
+			if ((i >> 3) <= 200)
+			{
+				/* Because ".der" file doesn't support "Record not found" error, so i use the expanded one.
+				 Sector number of "Record not found" error stores after the normal data of ".der" file format.
+				 It stores the data with the same algorithm to the address 200-380(0xC8-0x17C) */
+				derBuf[(i >> 3) + 200] |= (0x80 >> (i & 0x07));
+				isCopyProtect |= 2;
+			}
+		}
+	}
 
-	if (!isErrorCRC)
+	if (!isCopyProtect)
 	{
 		free(derBuf);
 		derBuf = 0;
@@ -3876,7 +3866,7 @@ byte loadHFE_File(int slotid, const char* filename)
 	}
 	else
 	{
-		isLoadDer = 1;
+		isLoadDer = isCopyProtect;
 	}
 
 	P = NewFDI(&FDD[slotid], headerCount+1, trackCount, recordCount, 512);
