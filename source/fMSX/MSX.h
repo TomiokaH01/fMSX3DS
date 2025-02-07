@@ -697,6 +697,10 @@ byte* LinearHDD(byte ID, int SectorN, byte PerTrack, byte Heads);
 byte HDDRead(byte ID, byte* Buf, int N, byte PerTrack, byte Heads);
 byte HDDWrite(byte ID, byte* Buf, int N, byte PerTrack, byte Heads);
 #endif // HDD_NEXTOR
+#ifdef HFE_DISK
+byte* GetMultiSector(int SectorNum);
+#endif // HFE_DISK
+
 
 #endif // _3DS
 

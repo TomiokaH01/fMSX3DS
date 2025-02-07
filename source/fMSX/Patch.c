@@ -386,6 +386,26 @@ case 0x4010:
                 return;
             }
 
+            if (isLoadDer & 0x04)
+            {
+                if (derBuf[(R->DE.W >> 3) + 400] & (0x80 >> (R->DE.W & 0x07)))
+                {
+                    if(random()%2==0)memcpy(Buf, GetMultiSector(R->DE.W), 512);
+                    //memcpy(Buf, GetMultiSector(R->DE.W), 512);
+                    if (Verbose & 0x04) printf("Load Multi Sector %d (Copy Protected)\n", R->DE.W);
+                }
+
+                if (derBuf[((R->DE.W-1) >> 3) + 400] & (0x80 >> ((R->DE.W-1) & 0x07)))
+                {
+                    if ((isLoadDer&0x02) && (derBuf[(R->DE.W >> 3) + 200] & (0x80 >> (R->DE.W & 0x07))))
+                    {
+                        if (random() % 2 == 0)memcpy(Buf, GetMultiSector(R->DE.W - 1), 512);
+                        //memcpy(Buf, GetMultiSector(R->DE.W-1), 512);
+                        if (Verbose & 0x04) printf("Load Multi Sector %d (Prev Sector) (Copy Protected)\n", R->DE.W - 1);
+                    }
+                }
+            }
+
             for (J = 0; J < 512; J++) WrZ80(Addr++, Buf[J]);
         }
 
@@ -413,8 +433,11 @@ case 0x4010:
         {
             if (derBuf[(R->DE.W >> 3) + 200] & (0x80 >> (R->DE.W & 0x07)))
             {
-                if (Verbose & 0x04) printf("Record not found in  Sector %d (Copy Protected)\n", R->DE.W);
-                R->AF.W = 0x0801; return;
+                if (!(derBuf[((R->DE.W - 1) >> 3) + 400] & (0x80 >> ((R->DE.W - 1) & 0x07))))
+                {
+                    if (Verbose & 0x04) printf("Record not found in  Sector %d (Copy Protected)\n", R->DE.W);
+                    R->AF.W = 0x0801; return;
+                }
             }
         }
     }
