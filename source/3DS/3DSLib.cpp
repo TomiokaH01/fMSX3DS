@@ -165,6 +165,11 @@ bool IsCapsReady = false;
 bool IsKanaReady = false;
 bool IsStart = true;
 
+#ifdef HFE_DISK
+#include <map>
+static std::map<int, std::vector<byte*>> MultiSecMap;
+#endif // HFE_DISK
+
 
 /** CommonMux.h **********************************************/
 /** Display drivers for all possible screen depths.         **/
@@ -3567,19 +3572,20 @@ byte loadHFE_File(int slotid, const char* filename)
 	byte* currDataBuf = dataBuf + 0;
 	int dataRecCount = 0;
 	int idxRecCount = 0;
-	uint16_t offsets[82];
-	uint16_t track_lens[82];
+	uint16_t offsets[85];
+	uint16_t track_lens[85];
 	byte* pictrackBuf = hfeBuf + 0x200;
 	word checkWord = 0;
 	int currShifted = 0;
 	int sectorSkipped = 0;
 	bool trackHasData = false;
 	bool IsSectorHasData = false;
+	bool isMultisector = false;
 	int recordCount = 0;
 	int headerCount = 0;
 	int trackCount = 0;
 	int sectorSum = 0;
-	int oldSecorSum = 0;
+	int oldSecorSum = -1;
 	int oldC;
 	byte sectorInfos[8];	/* [0:C]  [1:H]  [2:R]  [3:N]  [4:old C]  [5:old H]  [6:old R]  [7:old N] */
 	uint16_t calcCRC = 0;
@@ -3587,9 +3593,9 @@ byte loadHFE_File(int slotid, const char* filename)
 	uint16_t dataCRC = 0;
 	byte isCopyProtect = 0;
 	std::unordered_set<int> sectorSet;
-	if (derBuf == NULL)derBuf = (unsigned char*)malloc(380);
-	else derBuf = (unsigned char*)realloc(derBuf, 380);
-	memset(derBuf, 0, 380);
+	if (derBuf == NULL)derBuf = (unsigned char*)malloc(600);
+	else derBuf = (unsigned char*)realloc(derBuf, 600);
+	memset(derBuf, 0, 600);
 	for (int i = 0; i < hfeBuf[9]; i++)
 	{
 		offsets[i] = ((uint16_t)pictrackBuf[(i << 2) + 1] << 8) | (uint16_t)pictrackBuf[i << 2];
@@ -3665,10 +3671,10 @@ byte loadHFE_File(int slotid, const char* filename)
 							sectorInfos[0] = cdata;
 							if ((cdata >= trackCount) && (cdata <= 82))trackCount = cdata;
 							calcCRC = (Uint16)((calcCRC << 8) ^ CRC16Table[(byte)(calcCRC >> 8) ^ cdata]);
-							if ((cdata != oldC + 1) && (cdata != 0) && (cdata!=1) && (cdata != oldC))
-							{
-								if (Verbose & 0x04)printf("Wrong Cylinder Num[%d] oldC[%d] in Sector[%d]\n", cdata, oldC, sectorSum);
-							}
+							//if ((cdata != oldC + 1) && (cdata != 0) && (cdata!=1) && (cdata != oldC))
+							//{
+							//	if (Verbose & 0x04)printf("Wrong Cylinder Num[%d] oldC[%d] in Sector[%d]\n", cdata, oldC, sectorSum);
+							//}
 							oldC = cdata;
 							if ((Verbose & 0x04) && (cdata>=83))printf("Wrong Cylinder Num[%d] in Sector[%d]\n", cdata, sectorSum);
 							//if (Verbose & 0x04)printf("Cylinder Num[%d]", cdata);
@@ -3682,14 +3688,28 @@ byte loadHFE_File(int slotid, const char* filename)
 							break;
 						case 2:	/* R */
 							sectorInfos[2] = cdata;
-							if ((cdata >= recordCount) && (cdata <= 9))recordCount = cdata;
-							sectorSum = (sectorInfos[2] - 1 + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
-							if (sectorSet.count(sectorSum))
+							if (cdata <= 9)
 							{
-								if (Verbose & 0x04)printf("Multi sector in Sector[%d]\n", sectorSum);
+								if (cdata >= recordCount)recordCount = cdata;
+								if ((sectorInfos[0] <= 82) && (sectorInfos[1] <= 1))
+								{
+									sectorSum = (sectorInfos[2] - 1 + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
+									if (sectorSet.count(sectorSum))
+									{
+										if (Verbose & 0x04)printf("Multi sector in Sector[%d]\n", sectorSum);
+										if ((sectorSum >> 3) <= 200)
+										{
+											derBuf[(sectorSum >> 3) + 400] |= (0x80 >> (sectorSum & 0x07));
+											isMultisector = true;
+										}
+									}
+									else sectorSet.insert(sectorSum);
+								}
 							}
-							else sectorSet.insert(sectorSum);
-							//if (Verbose & 0x04)printf(" Record Num[%d]  Sector[%d]\n", cdata, sectorSum);
+							else
+							{
+								if(Verbose & 0x04)printf("Wrong Record Num[%d] in Sector[%d]\n", cdata, sectorSum);
+							}
 							calcCRC = (Uint16)((calcCRC << 8) ^ CRC16Table[(byte)(calcCRC >> 8) ^ cdata]);
 							break;
 						case 3:	/* N */
@@ -3728,7 +3748,7 @@ byte loadHFE_File(int slotid, const char* filename)
 
 					/* 0xA1 with missing clock bit to detect Address Mark(ID Address Mark or Data Address Mark) */
 					/* Detect data shift, and fix that. */
-					if ((int)(currBuf - hfeBuf) < hfesize - 260)
+					if ((int)(currBuf - hfeBuf) < hfesize - 261)
 					{
 						buf4 = i >= 252 ? currBuf[260] : currBuf[4];
 						for (int j = 0; j < 16; j++)
@@ -3787,10 +3807,33 @@ byte loadHFE_File(int slotid, const char* filename)
 								if ((sectorInfos[0] <= 82) && (sectorInfos[1] <= 1) && (sectorInfos[2] <= 9))
 								{
 									sectorSum = (sectorInfos[2] - 1 + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
-									if ((sectorSum != oldSecorSum) && (sectorSum*512 + 512 <hfesize/2))
+									//if ((sectorSum != oldSecorSum) && (sectorSum*512 + 512 <hfesize/2))
+									if (sectorSum < 0 && !sectorSet.count(sectorSum))
 									{
-										currDataBuf = dataBuf + (sectorSum * 512);
-										IsSectorHasData = true;
+										sectorSum = 0;
+										sectorSet.insert(sectorSum);
+									}
+									//if ((sectorSum != oldSecorSum) && (sectorSum * 512 + 512 < hfesize / 2) && (sectorSum>=0))
+									if ((sectorSum * 512 + 512 < hfesize / 2) && (sectorSum >= 0))
+									{
+										//currDataBuf = dataBuf + (sectorSum * 512);
+										//IsSectorHasData = true;
+										if (isMultisector)
+										{
+											isMultisector = false;
+											byte MultiBuf[512];
+											memset(MultiBuf, 0, 512);
+											std::vector<byte*> mulvec = MultiSecMap[sectorSum];
+											mulvec.push_back(MultiBuf);
+											MultiSecMap[sectorSum] = mulvec;
+											currDataBuf = MultiBuf + 0;
+											isCopyProtect |= 0x04;
+										}
+										else
+										{
+											currDataBuf = dataBuf + (sectorSum * 512);
+											IsSectorHasData = true;
+										}
 									}
 									else
 									{
@@ -3847,11 +3890,28 @@ byte loadHFE_File(int slotid, const char* filename)
 		if (!sectorSet.count(i))
 		{
 			if (Verbose & 0x04)printf("Record not found in Sector[%d]\n", i);
+			//if (i == 0)
+			//{
+			//	memcpy(dataBuf + 0, dataBuf + 8*512, 512);
+			//	continue;
+			//}
 			if ((i >> 3) <= 200)
 			{
 				/* Because ".der" file doesn't support "Record not found" error, so i use the expanded one.
 				 Sector number of "Record not found" error stores after the normal data of ".der" file format.
-				 It stores the data with the same algorithm to the address 200-380(0xC8-0x17C) */
+				 It stores the data with the same algorithm to the address 200-380(0xC8-0x17C)
+				 Sector number of multiple sector stores after the "Record not found" error infomation data.
+				 */
+
+				///* Next sector for multi sector. */
+				//if (i > 0)
+				//{
+				//	if (derBuf[((i - 1) >> 3) + 400] & (0x80 >> ((i - 1) & 0x07)))
+				//	{
+				//		continue;
+				//	}
+				//}
+
 				derBuf[(i >> 3) + 200] |= (0x80 >> (i & 0x07));
 				isCopyProtect |= 2;
 			}
@@ -3895,6 +3955,14 @@ word GetHfeShiftedVal(byte val0, byte val1, byte val2, byte val3, int shiftv)
 	uint checkWord;
 	checkWord = (((uint)val0 | ((uint)val1 << 8) | ((uint)val2 << 16) | ((uint)val3 << 24)) >> shiftv) & 0xFFFF;
 	return (checkWord >> 8 | ((checkWord & 0xFF) << 8));
+}
+
+
+byte* GetMultiSector(int SectorNum)
+{
+	std::vector<byte*> mulvec = MultiSecMap[SectorNum];
+	int veclen = mulvec.size();
+	return mulvec[rand()%veclen];
 }
 
 #endif // HFE_DISK
