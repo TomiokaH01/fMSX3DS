@@ -699,6 +699,7 @@ byte HDDWrite(byte ID, byte* Buf, int N, byte PerTrack, byte Heads);
 #endif // HDD_NEXTOR
 #ifdef HFE_DISK
 byte* GetMultiSector(int SectorNum);
+byte* GetIllegalSector(byte C, byte H, byte R);
 #endif // HFE_DISK
 
 
