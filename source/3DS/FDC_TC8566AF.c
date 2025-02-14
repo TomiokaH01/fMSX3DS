@@ -18,6 +18,8 @@
 #include "3DSLib.h"
 #include "3DSConfig.h"
 
+byte isMultiSector = 0;
+
 void ResetTC8566AF(register TC8566AF* D, FDIDisk* Disks, register unsigned char Eject)
 {
 	int J;
@@ -41,6 +43,8 @@ void ResetTC8566AF(register TC8566AF* D, FDIDisk* Disks, register unsigned char 
     D->PhaseStep = 0;
 
     D->Verbose = Verbose&0x04;
+
+    isMultiSector = 0;
 
     /* For all drives... */
     for (J = 0; J < 4; ++J)
@@ -84,66 +88,89 @@ unsigned char ReadTC8566AF(register TC8566AF* D, register unsigned char A)
                     D->Phase = PHASE_RESULT;
                     D->PhaseStep = 0;
                     D->SectorOffset = 0;
+                    isMultiSector = 0;
                 }
                 else if (D->SectorOffset < 512)
                 {
                     if (!D->SectorOffset)
                     {
-                        if (isLoadDer & 0x04)
+                        if (isLoadDer & 0x04)   /* Multi Sector */
                         {
                             J = D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors * (D->CurrTrack * D->Disk[D->Drive]->Sides + D->Side);
                             if (derBuf[(J >> 3) + 400] & (0x80 >> (J & 0x07)))
                             {
-                                if (random() % 2 == 0)memcpy(D->Ptr, GetMultiSector(J), 512);
+                                /* Use random() to read differ value when TC8566AF read multi sector */
+                                /* Many japanese games read multi sector in many time and check these value is not same. */
+                                if (random() % 2 == 0)
+                                {
+                                    //memcpy(D->Ptr, GetMultiSector(J), 512);
+                                    D->Ptr = GetMultiSector(J);
+                                    isMultiSector = 1;
+                                }
                                 if (Verbose & 0x04) printf("Load Multi Sector %d (Copy Protected)\n", J);
                             }
-
                             if (derBuf[((J - 1) >> 3) + 400] & (0x80 >> ((J - 1) & 0x07)))
                             {
                                 if ((isLoadDer & 0x02) && (derBuf[(J >> 3) + 200] & (0x80 >> (J & 0x07))))
                                 {
-                                    if (random() % 2 == 0)memcpy(D->Ptr, GetMultiSector(J - 1), 512);
+                                    if (random() % 2 == 0)
+                                    {
+                                        //memcpy(D->Ptr, GetMultiSector(J - 1), 512);
+                                        D->Ptr = GetMultiSector(J-1);
+                                        isMultiSector = 1;
+                                    }
                                     if (Verbose & 0x04) printf("Load Multi Sector %d (Prev Sector) (Copy Protected)\n", J - 1);
                                 }
                             }
                         }
+                        //if (isLoadDer & 0x08)   /* Illegal C, H, R value */
+                        //{
+                        //    if (D->SectorNumber > 9 || D->CurrTrack > 82 || D->Side > 1)
+                        //    {
+                        //        memcpy(D->Ptr, GetIllegalSector(D->CurrTrack, D->Side, D->SectorNumber), 512);
+                        //        if (Verbose & 0x04) printf("Load illegal sector C[%d], H[%d], R[%d]\n", D->CurrTrack, D->Side, D->SectorNumber);
+                        //    }
+                        //}
                     }
                     /* Read data */
                     retval = D->Ptr[D->SectorOffset];
                     D->SectorOffset++;
                     if (D->SectorOffset == 512)
                     {
-                        if (isLoadDer & 0x01)
+                        if (!isMultiSector)
                         {
-                            J = D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors * (D->CurrTrack * D->Disk[D->Drive]->Sides + D->Side);
-                            if (derBuf[J >> 3] & (0x80 >> (J & 0x07)))
+                            if (isLoadDer & 0x01)   /* Data CRC error */
                             {
-                                if (Verbose) printf("TC8566AF: ERROR CRC Sector %d (Copy Protected)\n", J);
-                                D->Status[0] |= 0x40;   /* 0x40:IC(Interrupt Code) */
-                                D->Status[1] |= 0x20;   /* 0x20:DE(Data Error) */
-                                D->Status[2] |= 0x20;   /* 0x20:DD(Data Error in Data Field ) */
-                                D->Phase = PHASE_RESULT;
-                                D->PhaseStep = 0;
-                                D->SectorOffset = 0;
-                                D->MainStatus &= 0x7F;
-                                return retval;
-                            }
-                        }
-                        if (isLoadDer & 0x02)
-                        {
-                            J = D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors * (D->CurrTrack * D->Disk[D->Drive]->Sides + D->Side);
-                            if (derBuf[(J >> 3) + 200] & (0x80 >> (J & 0x07)))
-                            {
-                                if (!(derBuf[((J - 1) >> 3) + 400] & (0x80 >> ((J - 1) & 0x07))))
+                                J = D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors * (D->CurrTrack * D->Disk[D->Drive]->Sides + D->Side);
+                                if (derBuf[J >> 3] & (0x80 >> (J & 0x07)))
                                 {
-                                    if (Verbose) printf("TC8566AF: ERROR Record not found %d (Copy Protected)\n", J);
+                                    if (Verbose) printf("TC8566AF: ERROR CRC Sector %d (Copy Protected)\n", J);
                                     D->Status[0] |= 0x40;   /* 0x40:IC(Interrupt Code) */
-                                    D->Status[1] |= 0x04;   /* 0x04:ND(No Data) */
+                                    D->Status[1] |= 0x20;   /* 0x20:DE(Data Error) */
+                                    D->Status[2] |= 0x20;   /* 0x20:DD(Data Error in Data Field ) */
                                     D->Phase = PHASE_RESULT;
                                     D->PhaseStep = 0;
                                     D->SectorOffset = 0;
                                     D->MainStatus &= 0x7F;
                                     return retval;
+                                }
+                            }
+                            if (isLoadDer & 0x02)   /* Record not found error */
+                            {
+                                J = D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors * (D->CurrTrack * D->Disk[D->Drive]->Sides + D->Side);
+                                if (derBuf[(J >> 3) + 200] & (0x80 >> (J & 0x07)))
+                                {
+                                    if (!(derBuf[((J - 1) >> 3) + 400] & (0x80 >> ((J - 1) & 0x07))))
+                                    {
+                                        if (Verbose) printf("TC8566AF: ERROR Record not found %d (Copy Protected)\n", J);
+                                        D->Status[0] |= 0x40;   /* 0x40:IC(Interrupt Code) */
+                                        D->Status[1] |= 0x04;   /* 0x04:ND(No Data) */
+                                        D->Phase = PHASE_RESULT;
+                                        D->PhaseStep = 0;
+                                        D->SectorOffset = 0;
+                                        D->MainStatus &= 0x7F;
+                                        return retval;
+                                    }
                                 }
                             }
                         }
@@ -323,6 +350,7 @@ void WriteTC8566AF(register TC8566AF* D, register unsigned char A, register unsi
                     D->OldSide = D->Side;
                     D->OldCylinderNumber = D->CylinderNumber;
                     D->OldSectorNumber = D->SectorNumber;
+                    isMultiSector = 0;
                     if(D->Cmd == CMD_READ_DATA)
                     //if ((D->Cmd == CMD_READ_DATA) || (D->Cmd == CMD_WRITE_DATA))
                     {
@@ -335,9 +363,18 @@ void WriteTC8566AF(register TC8566AF* D, register unsigned char A, register unsi
                         /* If seek successful, set up reading operation */
                         if (!D->Ptr)
                         {
-                            if (D->Verbose) printf("TC8566AF: Read ERROR\n");
-                            D->Status[0] |= 0x40;   /* 0x40:IC(Interrupt Code) */
-                            D->Status[1] |= 0x04;   /* 0x04:ND(No Data) */
+                            if ((isLoadDer & 0x08) && (D->SectorNumber > 9 || D->CurrTrack > 82 || D->Side > 1))    /* Illegal C, H, R value */
+                            {
+                                D->Ptr = GetIllegalSector(D->CurrTrack, D->Side, D->SectorNumber);
+                                //memcpy(D->Ptr, GetIllegalSector(D->CurrTrack, D->Side, D->SectorNumber), 512);
+                                if (Verbose & 0x04) printf("Load illegal sector C[%d], H[%d], R[%d]\n", D->CurrTrack, D->Side, D->SectorNumber);
+                            }
+                            else
+                            {
+                                if (D->Verbose) printf("TC8566AF: Read ERROR\n");
+                                D->Status[0] |= 0x40;   /* 0x40:IC(Interrupt Code) */
+                                D->Status[1] |= 0x04;   /* 0x04:ND(No Data) */
+                            }
                         }
                         D->MainStatus |= 0x40;  /* 0x40:DIO(Data Input/Output) */
                     }

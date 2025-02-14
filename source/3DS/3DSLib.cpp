@@ -167,7 +167,8 @@ bool IsStart = true;
 
 #ifdef HFE_DISK
 #include <map>
-static std::map<int, std::vector<byte*>> MultiSecMap;
+static std::map<int, byte*> MultiSecMap;
+static std::map<int, byte*> IllegalSecMap;
 #endif // HFE_DISK
 
 
@@ -3580,12 +3581,10 @@ byte loadHFE_File(int slotid, const char* filename)
 	int sectorSkipped = 0;
 	bool trackHasData = false;
 	bool IsSectorHasData = false;
-	bool isMultisector = false;
 	int recordCount = 0;
 	int headerCount = 0;
 	int trackCount = 0;
 	int sectorSum = 0;
-	int oldSecorSum = -1;
 	int oldC;
 	byte sectorInfos[8];	/* [0:C]  [1:H]  [2:R]  [3:N]  [4:old C]  [5:old H]  [6:old R]  [7:old N] */
 	uint16_t calcCRC = 0;
@@ -3694,16 +3693,6 @@ byte loadHFE_File(int slotid, const char* filename)
 								if ((sectorInfos[0] <= 82) && (sectorInfos[1] <= 1))
 								{
 									sectorSum = (sectorInfos[2] - 1 + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
-									if (sectorSet.count(sectorSum))
-									{
-										if (Verbose & 0x04)printf("Multi sector in Sector[%d]\n", sectorSum);
-										if ((sectorSum >> 3) <= 200)
-										{
-											derBuf[(sectorSum >> 3) + 400] |= (0x80 >> (sectorSum & 0x07));
-											isMultisector = true;
-										}
-									}
-									else sectorSet.insert(sectorSum);
 								}
 							}
 							else
@@ -3711,6 +3700,7 @@ byte loadHFE_File(int slotid, const char* filename)
 								if(Verbose & 0x04)printf("Wrong Record Num[%d] in Sector[%d]\n", cdata, sectorSum);
 							}
 							calcCRC = (Uint16)((calcCRC << 8) ^ CRC16Table[(byte)(calcCRC >> 8) ^ cdata]);
+							//if (Verbose & 0x04)printf(" Record Num[%d]\n", cdata);
 							break;
 						case 3:	/* N */
 							sectorInfos[3] = cdata;
@@ -3811,41 +3801,49 @@ byte loadHFE_File(int slotid, const char* filename)
 									if (sectorSum < 0 && !sectorSet.count(sectorSum))
 									{
 										sectorSum = 0;
-										sectorSet.insert(sectorSum);
+										//sectorSet.insert(sectorSum);
 									}
 									//if ((sectorSum != oldSecorSum) && (sectorSum * 512 + 512 < hfesize / 2) && (sectorSum>=0))
 									if ((sectorSum * 512 + 512 < hfesize / 2) && (sectorSum >= 0))
 									{
-										//currDataBuf = dataBuf + (sectorSum * 512);
-										//IsSectorHasData = true;
-										if (isMultisector)
+										if (sectorSet.count(sectorSum))
 										{
-											isMultisector = false;
-											byte MultiBuf[512];
-											memset(MultiBuf, 0, 512);
-											std::vector<byte*> mulvec = MultiSecMap[sectorSum];
-											mulvec.push_back(MultiBuf);
-											MultiSecMap[sectorSum] = mulvec;
-											currDataBuf = MultiBuf + 0;
-											isCopyProtect |= 0x04;
+											if (Verbose & 0x04)printf("Multi sector in Sector[%d]\n", sectorSum);
+											if ((sectorSum >> 3) <= 200)
+											{
+												derBuf[(sectorSum >> 3) + 400] |= (0x80 >> (sectorSum & 0x07));
+												byte MultiBuf[512];
+												memset(MultiBuf, 0, 512);
+												MultiSecMap[sectorSum] = MultiBuf;
+												currDataBuf = MultiBuf + 0;
+												isCopyProtect |= 0x04;
+											}
 										}
 										else
 										{
+											sectorSet.insert(sectorSum);
 											currDataBuf = dataBuf + (sectorSum * 512);
-											IsSectorHasData = true;
 										}
+										IsSectorHasData = true;
 									}
 									else
 									{
-										if ((Verbose & 0x04) && (sectorSum!=0))printf("Multi sector[%d] in Sector[%d]\n", sectorInfos[2], sectorSum);
+										if ((Verbose & 0x04) && (sectorSum!=0))printf("Illegal sector[%d] in Sector[%d]\n", sectorInfos[2], sectorSum);
 									}
-									oldSecorSum = sectorSum;
 
 									//currDataBuf = dataBuf + ((sectorInfos[2] - 1 + sectorSkipped
 									//	+ (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1]))) * 512);
 
 								// //currDataBuf = dataBuf + ((sectorInfos[2] - 1 - sectorSkipped +
 								// //	(recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1]))) * 512);
+								}
+								else
+								{
+									byte IllBuf[512];
+									memset(IllBuf, 0, 512);
+									IllegalSecMap[(Uint32)sectorInfos[0] << 16 | (Uint32)sectorInfos[1] << 8 | (Uint32)sectorInfos[2]] = IllBuf;
+									currDataBuf = IllBuf + 0;
+									isCopyProtect |= 0x08;
 								}
 								// //int J = D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors * (D->CurrTrack * D->Disk[D->Drive]->Sides + D->Side);
 							}
@@ -3926,6 +3924,11 @@ byte loadHFE_File(int slotid, const char* filename)
 	}
 	else
 	{
+		if (isCopyProtect == 8)
+		{
+			free(derBuf);
+			derBuf = 0;
+		}
 		isLoadDer = isCopyProtect;
 	}
 
@@ -3958,11 +3961,16 @@ word GetHfeShiftedVal(byte val0, byte val1, byte val2, byte val3, int shiftv)
 }
 
 
+/* Wrapper function to use std::map to C */
 byte* GetMultiSector(int SectorNum)
 {
-	std::vector<byte*> mulvec = MultiSecMap[SectorNum];
-	int veclen = mulvec.size();
-	return mulvec[rand()%veclen];
+	return MultiSecMap[SectorNum];
+}
+
+/* Wrapper function to use std::map to C */
+byte* GetIllegalSector(byte C, byte H, byte R)
+{
+	return IllegalSecMap[(Uint32)C << 16 | (Uint32)H << 8 | (Uint32)R];
 }
 
 #endif // HFE_DISK
