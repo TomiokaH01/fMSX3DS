@@ -3553,7 +3553,7 @@ unsigned short CRC16Table[256] = {
 /* https://middleriver.chagasi.com/electronics/fddemu.html */
 /* and infomation at MSX techenical guide book disk edition. */
 /* http://www.ascat.jp/tg/tgdindex.html */
-byte loadHFE_File(int slotid, const char* filename)
+byte loadHFE_File(int slotid, const char* filename, byte isSavedDisk)
 {
 	FILE* hfeFile;
 	byte* hfeBuf, * P;
@@ -3587,22 +3587,28 @@ byte loadHFE_File(int slotid, const char* filename)
 	int sectorSum = 0;
 	int oldC;
 	int hfeVersion = 0;
-	int hfeV3Skip = 0;
-	//std::vector<byte> hfeV3Vec;
-	//byte* hfev3Buf, *currhfev3Buf;
 	byte sectorInfos[8];	/* [0:C]  [1:H]  [2:R]  [3:N]  [4:old C]  [5:old H]  [6:old R]  [7:old N] */
 	uint16_t calcCRC = 0;
 	uint16_t idxcrc = 0;
 	uint16_t dataCRC = 0;
 	byte isCopyProtect = 0;
 	std::unordered_set<int> sectorSet;
-	std::vector<std::vector<byte>> hfeV3VecVec;
-	std::vector<byte> hfeV3Vec, hfeV3PreVec, hfeV3PostVec;
-	int hfeV3Size;
-	//std::map<int, int> hfeV3Map;
+	std::vector<byte> hfeV3Vec;
+		/* Check header for HFE file."HXCPICFE" for HFEv1 and HFEv2, "HXCHFEV3" for HFEv3 */
+	if (hfeBuf[0] != 'H' || hfeBuf[1] != 'X' || hfeBuf[2] != 'C')
+	{
+		if (isSavedDisk)
+		{
+			/* Saved Disk data is saved as DSK format. */
+			if (ChangeDiskWithFormat(slotid, filename, FMT_MSXDSK))return (1);
+		}
+		return(0);
+	}
+
 	if (derBuf == NULL)derBuf = (unsigned char*)malloc(600);
 	else derBuf = (unsigned char*)realloc(derBuf, 600);
 	memset(derBuf, 0, 600);
+
 	for (int i = 0; i < hfeBuf[9]; i++)
 	{
 		offsets[i] = ((uint16_t)pictrackBuf[(i << 2) + 1] << 8) | (uint16_t)pictrackBuf[i << 2];
@@ -3960,7 +3966,7 @@ byte loadHFE_File(int slotid, const char* filename)
 	trackCount += 1;
 	if (Verbose & 0x04)
 	{
-		printf("HFE Disk Record[%d] Header[%d] Track[%d] Length[%08Xh]\n", recordCount, headerCount, trackCount,
+		if(!isSavedDisk)printf("HFE Disk Record[%d] Header[%d] Track[%d] Length[%08Xh]\n", recordCount, headerCount, trackCount,
 			recordCount * (headerCount + 1) * trackCount * 512);
 	}
 	sectorSum = recordCount * (headerCount + 1) * trackCount;

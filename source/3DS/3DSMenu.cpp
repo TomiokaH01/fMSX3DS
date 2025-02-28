@@ -1068,9 +1068,15 @@ void BrowseROM(int slotid, int browsetype)
 					std::string currstr = getZipSaveDiskPath(cfstring, extname);
 					std::string savestr;
 					savestr = cfstring;
+					unsigned char isSavedDisk = 0;
 					struct stat buf;
-					if (stat(currstr.c_str(), &buf) == 0)cfstring = currstr;
-					if(ChangeHFE_DiskWithFormat(slotid, cfstring.c_str(), FMT_MSXDSK))
+					//if (stat(currstr.c_str(), &buf) == 0)cfstring = currstr;
+					if (stat(currstr.c_str(), &buf) == 0)
+					{
+						cfstring = currstr;
+						isSavedDisk = 1;
+					}
+					if(ChangeHFE_DiskWithFormat(slotid, cfstring.c_str(), FMT_MSXDSK, isSavedDisk))
 					{
 						DiskStr[slotid] = currstr;
 						DiskRawStr[slotid] = cfstring;
@@ -1765,9 +1771,15 @@ void BrowseLoadRecently(int slotid, int browsetype)
 						std::string currstr = getZipSaveDiskPath(cfstring, extname);
 						std::string savestr;
 						savestr = cfstring;
+						unsigned char isSavedDisk = 0;
 						struct stat buf;
-						if (stat(currstr.c_str(), &buf) == 0)cfstring = currstr;
-						if (ChangeHFE_DiskWithFormat(slotid, cfstring.c_str(), FMT_MSXDSK))
+						//if (stat(currstr.c_str(), &buf) == 0)cfstring = currstr;
+						if (stat(currstr.c_str(), &buf) == 0)
+						{
+							cfstring = currstr;
+							isSavedDisk = 1;
+						}
+						if (ChangeHFE_DiskWithFormat(slotid, cfstring.c_str(), FMT_MSXDSK, isSavedDisk))
 						{
 							DiskStr[slotid] = currstr;
 							DiskRawStr[slotid] = cfstring;
