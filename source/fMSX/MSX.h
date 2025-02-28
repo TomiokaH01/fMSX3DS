@@ -317,7 +317,7 @@ void ResetPPI();
 void WriteRAM(word A, byte Value);
 byte ChangeDiskWithFormat(byte N, const char* FileName, int Format);
 #ifdef HFE_DISK
-byte ChangeHFE_DiskWithFormat(byte N, const char* FileName, int Format);
+byte ChangeHFE_DiskWithFormat(byte N, const char* FileName, int Format, byte isSavedDisk);
 #endif // HFE_DISK
 byte GetROMType(int Slot);
 void SetROMType(int Slot, int Value);

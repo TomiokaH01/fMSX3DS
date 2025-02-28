@@ -6647,7 +6647,7 @@ byte ChangeDiskWithFormat(byte N, const char* FileName, int Format)
 
 
 #ifdef HFE_DISK
-byte ChangeHFE_DiskWithFormat(byte N, const char* FileName, int Format)
+byte ChangeHFE_DiskWithFormat(byte N, const char* FileName, int Format, byte isSavedDisk)
 {
     int NeedState;
 
@@ -6665,7 +6665,7 @@ byte ChangeHFE_DiskWithFormat(byte N, const char* FileName, int Format)
 #endif // UPD_FDC
 
         /* If FileName not empty, try loading disk image */
-    if (*FileName && loadHFE_File(N, FileName))
+    if (*FileName && loadHFE_File(N, FileName, isSavedDisk))
     {
         /* If first disk, also try loading state */
         if (NeedState) FindState(FileName);
