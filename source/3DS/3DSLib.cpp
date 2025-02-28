@@ -3568,7 +3568,7 @@ byte loadHFE_File(int slotid, const char* filename)
 	rewind(hfeFile);
 	fread(hfeBuf, 1, hfesize, hfeFile);
 	byte* currBuf = hfeBuf + 0x400;
-	byte* startBuf = hfeBuf + 0x400;
+	byte* startBuf;
 	byte* dataBuf = (byte*)malloc(hfesize / 2);
 	byte* currDataBuf = dataBuf + 0;
 	int dataRecCount = 0;
@@ -3586,12 +3586,20 @@ byte loadHFE_File(int slotid, const char* filename)
 	int trackCount = 0;
 	int sectorSum = 0;
 	int oldC;
+	int hfeVersion = 0;
+	int hfeV3Skip = 0;
+	//std::vector<byte> hfeV3Vec;
+	//byte* hfev3Buf, *currhfev3Buf;
 	byte sectorInfos[8];	/* [0:C]  [1:H]  [2:R]  [3:N]  [4:old C]  [5:old H]  [6:old R]  [7:old N] */
 	uint16_t calcCRC = 0;
 	uint16_t idxcrc = 0;
 	uint16_t dataCRC = 0;
 	byte isCopyProtect = 0;
 	std::unordered_set<int> sectorSet;
+	std::vector<std::vector<byte>> hfeV3VecVec;
+	std::vector<byte> hfeV3Vec, hfeV3PreVec, hfeV3PostVec;
+	int hfeV3Size;
+	//std::map<int, int> hfeV3Map;
 	if (derBuf == NULL)derBuf = (unsigned char*)malloc(600);
 	else derBuf = (unsigned char*)realloc(derBuf, 600);
 	memset(derBuf, 0, 600);
@@ -3601,6 +3609,9 @@ byte loadHFE_File(int slotid, const char* filename)
 		track_lens[i] = ((uint16_t)pictrackBuf[(i << 2) + 3] << 8) | (uint16_t)pictrackBuf[(i << 2) + 2];
 	}
 
+	/* HFE v3 format */
+	if (hfeBuf[6] == 'V' && hfeBuf[7] == '3')hfeVersion = 3;
+
 	for (int g = 0; g < hfeBuf[9]; g++)
 	{
 		if ((offsets[g] == 0) || (track_lens[g] == 0))break;
@@ -3608,21 +3619,91 @@ byte loadHFE_File(int slotid, const char* filename)
 		/* h==0->Side 0,  h==1->Side 1 */
 		for (int h = 0; h < 2; h++)
 		{
-			//if (Verbose & 0x04)printf("Track[%d]  Side[%d]\n", g, h);
-			currBuf = startBuf = hfeBuf + (((int)offsets[g] * 0x200) + (h * 0x100) + 0x200);
+			/* Convert HFE v3 buffer to HFE v1 buffer. */
+			if (hfeVersion == 3)
+			{
+				currBuf = startBuf = hfeBuf + (((int)offsets[g] * 0x200) + (h * 0x100) + 0x200);
+				hfeV3Vec.clear();
+				track_lens[g] = ((uint16_t)pictrackBuf[(g << 2) + 3] << 8) | (uint16_t)pictrackBuf[(g << 2) + 2];
+				while ((int)(currBuf - startBuf) < track_lens[g]-512)
+				//for (int i = 0; i < track_lens[g]; i += 512)
+				{
+					for (int j = 0; j < 256; j++, currBuf++)
+					{
+						if (j == 0)
+						{
+							switch (currBuf[-257])
+							{
+							case 0x4F:	/* HFE v3 opcode 0xF2(0x4F in LSB) + 1byte : SET BITRATE */
+							case 0xCF:	/* HFE v3 opcode 0xF3(0xCF in LSB) + 1byte : SKIP BITS */
+								continue;
+							default:
+								break;
+							}
+						}
+						else
+						{
+							switch (currBuf[-1])
+							{
+							case 0x4F:
+							case 0xCF:
+								continue;
+							default:
+								break;
+							}
+						}
+						switch (currBuf[0])
+						{
+						case 0x0F:	/* HFE v3 opcode 0xF0(0x0F in LSB): NOP */
+						case 0x2F:	/* HFE v3 opcode 0xF4(0x2F in LSB): RAND */
+						case 0x8F:	/* HFE v3 opcode 0xF1(0x8F in LSB): SET INDEX */
+						case 0x4F:	/* HFE v3 opcode 0xF2(0x4F in LSB) + 1byte : SET BITRATE */
+						case 0xCF:	/* HFE v3 opcode 0xF3(0xCF in LSB) + 1byte : SKIP BITS */
+							continue;
+						default:
+							break;
+						}
+						hfeV3Vec.push_back(currBuf[0]);
+					}
+					currBuf += 256;
+				}
+				currBuf = startBuf = hfeBuf + (((int)offsets[g] * 0x200) + (h * 0x100) + 0x200);
+				int cnt0 = 0;
+				bool loopend = false;
+				while(!loopend)
+				{
+					for (int j = 0; j < 256; j++, currBuf++)
+					{
+						if (cnt0>=hfeV3Vec.size())
+						{
+							loopend = true;
+							break;
+						}
+						currBuf[0] = hfeV3Vec[cnt0];
+						cnt0++;
+					}
+					if(!loopend)currBuf += 256;
+				}
+				track_lens[g] = (int)(currBuf - startBuf) - 512;
+				//track_lens[g] = hfeV3Vec.size();
+			}
+			currBuf = hfeBuf + (((int)offsets[g] * 0x200) + (h * 0x100) + 0x200);
 			currShifted = 0;
 			//if (!dataRecCount)trackHasData = false;
 			//if (Verbose & 0x04)printf("Addr: %d\n", (((int)offsets[g] * 0x200) + (h * 0x100) + 0x200));
-			while ((int)(currBuf - startBuf) < track_lens[g])
+			//while ((int)(currBuf - startBuf) < track_lens[g])
+			for(int i = 0; i < track_lens[g]; i += 512)
 			{
-				for (int i = 0; i < 256; i += 2, currBuf += 2)
+				for (int j = 0; j < 256; j += 2, currBuf += 2)
 				{
 					if ((int)(currBuf - hfeBuf) >= hfesize - 260)break;
+
 					/* Convert RAW MFM encoded value to data. */
 					buf0 = currBuf[0];
-					buf1 = i >= 255 ? currBuf[257] : currBuf[1];
-					buf2 = i >= 254 ? currBuf[258] : currBuf[2];
-					buf3 = i >= 253 ? currBuf[259] : currBuf[3];
+					buf1 = j >= 255 ? currBuf[257] : currBuf[1];
+					buf2 = j >= 254 ? currBuf[258] : currBuf[2];
+					buf3 = j >= 253 ? currBuf[259] : currBuf[3];
+
 					wdata = GetHfeShiftedVal(buf0, buf1, buf2, buf3, currShifted);
 					cdata0 = wdata >> 8;
 					cdata1 = wdata & 0xFF;
@@ -3740,22 +3821,22 @@ byte loadHFE_File(int slotid, const char* filename)
 					/* Detect data shift, and fix that. */
 					if ((int)(currBuf - hfeBuf) < hfesize - 261)
 					{
-						buf4 = i >= 252 ? currBuf[260] : currBuf[4];
-						for (int j = 0; j < 16; j++)
+						buf4 = j >= 252 ? currBuf[260] : currBuf[4];
+						for (int k = 0; k < 16; k++)
 						{
-							checkWord = GetHfeShiftedVal(buf0, buf1, buf2, buf3, j);
+							checkWord = GetHfeShiftedVal(buf0, buf1, buf2, buf3, k);
 							/* data "0xA1" with missing clock */	/* 0x9148(LSB) == 0x4489(MSB) */
 							if (checkWord == 0x9148)
 							{
-								buf5 = i >= 251 ? currBuf[261] : currBuf[5];
-								checkWord = GetHfeShiftedVal(buf2, buf3, buf4, buf5, j);
+								buf5 = j >= 251 ? currBuf[261] : currBuf[5];
+								checkWord = GetHfeShiftedVal(buf2, buf3, buf4, buf5, k);
 								if (checkWord == 0x9148)
 								{
 									//if (Verbose & 0x08)
 									//{
 									//	if (currShifted != j)printf("currShift[%d] ", j);
 									//}
-									currShifted = j;
+									currShifted = k;
 									break;
 								}
 							}
@@ -3764,10 +3845,10 @@ byte loadHFE_File(int slotid, const char* filename)
 					if ((cdata == 0xF8) || (cdata == 0xFB) || (cdata == 0xFE))
 					{
 						//buf1 = i >= 255 ? currBuf[257] : currBuf[1];
-						bufp0 = i >= 4 ? currBuf[-4] : currBuf[-260];
-						bufp1 = i >= 3 ? currBuf[-3] : currBuf[-259];
-						bufp2 = i >= 2 ? currBuf[-2] : currBuf[-258];
-						bufp3 = i >= 1 ? currBuf[-1] : currBuf[-257];
+						bufp0 = j >= 4 ? currBuf[-4] : currBuf[-260];
+						bufp1 = j >= 3 ? currBuf[-3] : currBuf[-259];
+						bufp2 = j >= 2 ? currBuf[-2] : currBuf[-258];
+						bufp3 = j >= 1 ? currBuf[-1] : currBuf[-257];
 						if (cdata == 0xF8)	/* Start Deleted data */
 						{
 							/* data "0xA1" with missing clock */	/* 0x9148(LSB) == 0x4489(MSB) */
@@ -3788,7 +3869,7 @@ byte loadHFE_File(int slotid, const char* filename)
 								/* Start Calculate CRC for data here */
 								calcCRC = 0xFFFF;
 								calcCRC = 0xFFFF;
-								for (int j = 0; j < 3; j++)
+								for (int k = 0; k < 3; k++)
 								{
 									calcCRC = (Uint16)((calcCRC << 8) ^ CRC16Table[(byte)(calcCRC >> 8) ^ 0xA1]);
 								}
@@ -3958,6 +4039,20 @@ word GetHfeShiftedVal(byte val0, byte val1, byte val2, byte val3, int shiftv)
 	uint checkWord;
 	checkWord = (((uint)val0 | ((uint)val1 << 8) | ((uint)val2 << 16) | ((uint)val3 << 24)) >> shiftv) & 0xFFFF;
 	return (checkWord >> 8 | ((checkWord & 0xFF) << 8));
+}
+
+
+byte GetHfeV3Val(byte* Buf, int index, int shift, int skip)
+{
+	int j = shift + skip;
+	if (j + index >= 256)j += 256;
+	if (j + index < 0)j -= 256;
+	if (Buf[j] == 0x4F)
+	{
+		skip += 2;
+		j = shift + skip;
+	}
+	return (Buf[j]);
 }
 
 
