@@ -87,7 +87,7 @@ extern unsigned char MSX0_ANALOGOUT;
 #endif // _MSX0
 
 #ifdef HFE_DISK
-unsigned char loadHFE_File(int slotid, const char* filename, unsigned char isSavedDisk);
+unsigned char LoadHFE_File(int slotid, const char* filename, unsigned char isSavedDisk);
 unsigned short GetHfeShiftedVal(unsigned char val0, unsigned char val1, unsigned char val2, unsigned char val3, int shiftv);
 unsigned char GetHfeV3Val(unsigned char* Buf, int index, int shift, int skip);
 #endif // HFE_DISK

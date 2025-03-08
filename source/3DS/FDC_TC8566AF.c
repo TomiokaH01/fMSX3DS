@@ -18,7 +18,9 @@
 #include "3DSLib.h"
 #include "3DSConfig.h"
 
+#ifdef HFE_DISK
 byte isMultiSector = 0;
+#endif // HFE_DISK
 
 void ResetTC8566AF(register TC8566AF* D, FDIDisk* Disks, register unsigned char Eject)
 {
@@ -44,7 +46,9 @@ void ResetTC8566AF(register TC8566AF* D, FDIDisk* Disks, register unsigned char 
 
     D->Verbose = Verbose&0x04;
 
+#ifdef HFE_DISk
     isMultiSector = 0;
+#endif // HFE_DISk
 
     /* For all drives... */
     for (J = 0; J < 4; ++J)
@@ -88,10 +92,13 @@ unsigned char ReadTC8566AF(register TC8566AF* D, register unsigned char A)
                     D->Phase = PHASE_RESULT;
                     D->PhaseStep = 0;
                     D->SectorOffset = 0;
+#ifdef HFE_DISK
                     isMultiSector = 0;
+#endif // HFE_DISK
                 }
                 else if (D->SectorOffset < 512)
                 {
+#ifdef HFE_DISK
                     if (!D->SectorOffset)
                     {
                         if (isLoadDer & 0x04)   /* Multi Sector */
@@ -132,14 +139,19 @@ unsigned char ReadTC8566AF(register TC8566AF* D, register unsigned char A)
                         //    }
                         //}
                     }
+#endif // HFE_DISK
                     /* Read data */
                     retval = D->Ptr[D->SectorOffset];
                     D->SectorOffset++;
                     if (D->SectorOffset == 512)
                     {
+#ifdef HFE_DISK
                         if (!isMultiSector)
                         {
                             if (isLoadDer & 0x01)   /* Data CRC error */
+#else
+                            if (isLoadDer)  /* Data CRC error */
+#endif // HFE_DISK
                             {
                                 J = D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors * (D->CurrTrack * D->Disk[D->Drive]->Sides + D->Side);
                                 if (derBuf[J >> 3] & (0x80 >> (J & 0x07)))
@@ -155,6 +167,7 @@ unsigned char ReadTC8566AF(register TC8566AF* D, register unsigned char A)
                                     return retval;
                                 }
                             }
+#ifdef HFE_DISK
                             if (isLoadDer & 0x02)   /* Record not found error */
                             {
                                 J = D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors * (D->CurrTrack * D->Disk[D->Drive]->Sides + D->Side);
@@ -174,6 +187,7 @@ unsigned char ReadTC8566AF(register TC8566AF* D, register unsigned char A)
                                 }
                             }
                         }
+#endif // HFE_DISK
                         if (D->Verbose) printf("TC8566AF: DONE reading data\n");
                         D->Phase = PHASE_RESULT;
                         D->PhaseStep = 0;
@@ -350,7 +364,9 @@ void WriteTC8566AF(register TC8566AF* D, register unsigned char A, register unsi
                     D->OldSide = D->Side;
                     D->OldCylinderNumber = D->CylinderNumber;
                     D->OldSectorNumber = D->SectorNumber;
+#ifdef HFE_DISK
                     isMultiSector = 0;
+#endif // HFE_DISK
                     if(D->Cmd == CMD_READ_DATA)
                     //if ((D->Cmd == CMD_READ_DATA) || (D->Cmd == CMD_WRITE_DATA))
                     {
@@ -363,6 +379,7 @@ void WriteTC8566AF(register TC8566AF* D, register unsigned char A, register unsi
                         /* If seek successful, set up reading operation */
                         if (!D->Ptr)
                         {
+#ifdef HFE_DISK
                             if ((isLoadDer & 0x08) && (D->SectorNumber > 9 || D->CurrTrack > 82 || D->Side > 1))    /* Illegal C, H, R value */
                             {
                                 D->Ptr = GetIllegalSector(D->CurrTrack, D->Side, D->SectorNumber);
@@ -371,10 +388,13 @@ void WriteTC8566AF(register TC8566AF* D, register unsigned char A, register unsi
                             }
                             else
                             {
+#endif // HFE_DISK
                                 if (D->Verbose) printf("TC8566AF: Read ERROR\n");
                                 D->Status[0] |= 0x40;   /* 0x40:IC(Interrupt Code) */
                                 D->Status[1] |= 0x04;   /* 0x04:ND(No Data) */
+#ifdef HFE_DISK
                             }
+#endif // HFE_DISK
                         }
                         D->MainStatus |= 0x40;  /* 0x40:DIO(Data Input/Output) */
                     }

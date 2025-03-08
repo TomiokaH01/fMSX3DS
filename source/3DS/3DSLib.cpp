@@ -3553,7 +3553,7 @@ unsigned short CRC16Table[256] = {
 /* https://middleriver.chagasi.com/electronics/fddemu.html */
 /* and infomation at MSX techenical guide book disk edition. */
 /* http://www.ascat.jp/tg/tgdindex.html */
-byte loadHFE_File(int slotid, const char* filename, byte isSavedDisk)
+byte LoadHFE_File(int slotid, const char* filename, byte isSavedDisk)
 {
 	FILE* hfeFile;
 	byte* hfeBuf, * P;
@@ -3578,16 +3578,13 @@ byte loadHFE_File(int slotid, const char* filename, byte isSavedDisk)
 	byte* pictrackBuf = hfeBuf + 0x200;
 	word checkWord = 0;
 	int currShifted = 0;
-	int sectorSkipped = 0;
-	bool trackHasData = false;
 	bool IsSectorHasData = false;
 	int recordCount = 0;
 	int headerCount = 0;
 	int trackCount = 0;
 	int sectorSum = 0;
-	int oldC;
 	int hfeVersion = 0;
-	byte sectorInfos[8];	/* [0:C]  [1:H]  [2:R]  [3:N]  [4:old C]  [5:old H]  [6:old R]  [7:old N] */
+	byte sectorInfos[4];	/* [0:C]  [1:H]  [2:R]  [3:N] */
 	uint16_t calcCRC = 0;
 	uint16_t idxcrc = 0;
 	uint16_t dataCRC = 0;
@@ -3632,7 +3629,6 @@ byte loadHFE_File(int slotid, const char* filename, byte isSavedDisk)
 				hfeV3Vec.clear();
 				track_lens[g] = ((uint16_t)pictrackBuf[(g << 2) + 3] << 8) | (uint16_t)pictrackBuf[(g << 2) + 2];
 				while ((int)(currBuf - startBuf) < track_lens[g]-512)
-				//for (int i = 0; i < track_lens[g]; i += 512)
 				{
 					for (int j = 0; j < 256; j++, currBuf++)
 					{
@@ -3695,9 +3691,6 @@ byte loadHFE_File(int slotid, const char* filename, byte isSavedDisk)
 			}
 			currBuf = hfeBuf + (((int)offsets[g] * 0x200) + (h * 0x100) + 0x200);
 			currShifted = 0;
-			//if (!dataRecCount)trackHasData = false;
-			//if (Verbose & 0x04)printf("Addr: %d\n", (((int)offsets[g] * 0x200) + (h * 0x100) + 0x200));
-			//while ((int)(currBuf - startBuf) < track_lens[g])
 			for(int i = 0; i < track_lens[g]; i += 512)
 			{
 				for (int j = 0; j < 256; j += 2, currBuf += 2)
@@ -3757,11 +3750,6 @@ byte loadHFE_File(int slotid, const char* filename, byte isSavedDisk)
 							sectorInfos[0] = cdata;
 							if ((cdata >= trackCount) && (cdata <= 82))trackCount = cdata;
 							calcCRC = (Uint16)((calcCRC << 8) ^ CRC16Table[(byte)(calcCRC >> 8) ^ cdata]);
-							//if ((cdata != oldC + 1) && (cdata != 0) && (cdata!=1) && (cdata != oldC))
-							//{
-							//	if (Verbose & 0x04)printf("Wrong Cylinder Num[%d] oldC[%d] in Sector[%d]\n", cdata, oldC, sectorSum);
-							//}
-							oldC = cdata;
 							if ((Verbose & 0x04) && (cdata>=83))printf("Wrong Cylinder Num[%d] in Sector[%d]\n", cdata, sectorSum);
 							//if (Verbose & 0x04)printf("Cylinder Num[%d]", cdata);
 							break;
@@ -3801,14 +3789,8 @@ byte loadHFE_File(int slotid, const char* filename, byte isSavedDisk)
 							idxcrc |= cdata;
 							if (calcCRC != idxcrc)
 							{
-								//isErrorCRC |= 1;
-								//sectorSum = (sectorInfos[2] - 1  + (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1])));
-								//if ((sectorSum >> 3) <= 200)
-								//{
-								//	derBuf[sectorSum >> 3] |= (0x80 >> (sectorSum & 0x07));
-									if (Verbose & 0x04)printf("ID Mark CRC Error in Sector[%d] : CalcCRC[%04Xh]  IdMarkCRC[%04Xh]\n"
-										, sectorSum, calcCRC, idxcrc);
-								//}
+								if (Verbose & 0x04)printf("ID Mark CRC Error in Sector[%d] : CalcCRC[%04Xh]  IdMarkCRC[%04Xh]\n"
+									, sectorSum, calcCRC, idxcrc);
 							}
 							if ((!IsSectorHasData) && (sectorSum>=2))
 							{
@@ -3850,7 +3832,6 @@ byte loadHFE_File(int slotid, const char* filename, byte isSavedDisk)
 					}
 					if ((cdata == 0xF8) || (cdata == 0xFB) || (cdata == 0xFE))
 					{
-						//buf1 = i >= 255 ? currBuf[257] : currBuf[1];
 						bufp0 = j >= 4 ? currBuf[-4] : currBuf[-260];
 						bufp1 = j >= 3 ? currBuf[-3] : currBuf[-259];
 						bufp2 = j >= 2 ? currBuf[-2] : currBuf[-258];
@@ -3858,7 +3839,6 @@ byte loadHFE_File(int slotid, const char* filename, byte isSavedDisk)
 						if (cdata == 0xF8)	/* Start Deleted data */
 						{
 							/* data "0xA1" with missing clock */	/* 0x9148(LSB) == 0x4489(MSB) */
-							//if (GetHfeShiftedVal(currBuf[-4], currBuf[-3], currBuf[-2], currBuf[-1], currShifted) == 0x9148)
 							if (GetHfeShiftedVal(bufp0, bufp1, bufp2, bufp3, currShifted) == 0x9148)
 							{
 								if (Verbose & 0x04)printf("Deleted Data\n");
@@ -3867,11 +3847,9 @@ byte loadHFE_File(int slotid, const char* filename, byte isSavedDisk)
 						if (cdata == 0xFB)	/* Start Data */
 						{
 							/* data "0xA1" with missing clock */	/* 0x9148(LSB) == 0x4489(MSB) */
-							//if (GetHfeShiftedVal(currBuf[-4], currBuf[-3], currBuf[-2], currBuf[-1], currShifted) == 0x9148)
 							if (GetHfeShiftedVal(bufp0, bufp1, bufp2, bufp3, currShifted) == 0x9148)
 							{
 								dataRecCount = 512 + 2;		/* Data:512byte,  CRC of data:2byte */
-								trackHasData = true;
 								/* Start Calculate CRC for data here */
 								calcCRC = 0xFFFF;
 								calcCRC = 0xFFFF;
@@ -3917,12 +3895,6 @@ byte loadHFE_File(int slotid, const char* filename, byte isSavedDisk)
 									{
 										if ((Verbose & 0x04) && (sectorSum!=0))printf("Illegal sector[%d] in Sector[%d]\n", sectorInfos[2], sectorSum);
 									}
-
-									//currDataBuf = dataBuf + ((sectorInfos[2] - 1 + sectorSkipped
-									//	+ (recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1]))) * 512);
-
-								// //currDataBuf = dataBuf + ((sectorInfos[2] - 1 - sectorSkipped +
-								// //	(recordCount * (sectorInfos[0] * (headerCount + 1) + sectorInfos[1]))) * 512);
 								}
 								else
 								{
@@ -3932,13 +3904,11 @@ byte loadHFE_File(int slotid, const char* filename, byte isSavedDisk)
 									currDataBuf = IllBuf + 0;
 									isCopyProtect |= 0x08;
 								}
-								// //int J = D->SectorNumber - 1 + D->Disk[D->Drive]->Sectors * (D->CurrTrack * D->Disk[D->Drive]->Sides + D->Side);
 							}
 						}
 
 						if (cdata == 0xFE) /* Start ID Address Mark */
 						{
-							//if (GetHfeShiftedVal(currBuf[-4], currBuf[-3], currBuf[-2], currBuf[-1], currShifted) == 0x9148)
 							if (GetHfeShiftedVal(bufp0, bufp1, bufp2, bufp3, currShifted) == 0x9148)
 							{
 								idxRecCount = 6;
@@ -3955,14 +3925,8 @@ byte loadHFE_File(int slotid, const char* filename, byte isSavedDisk)
 				}
 				currBuf += 256;
 			}
-			//if (trackHasData)trackCount++;
-			//else
-			//{
-			//	if (Verbose & 0x04)printf("Record not found[%d]\n",sectorSum);
-			//}
 		}
 	}
-	//trackCount /= (headerCount + 1);
 	trackCount += 1;
 	if (Verbose & 0x04)
 	{
