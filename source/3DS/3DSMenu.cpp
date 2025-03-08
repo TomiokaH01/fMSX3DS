@@ -394,6 +394,7 @@ static std::vector<std::string> menuItem =
 	"",
 	"<Hard Disk Files>",
 	"[Load HardDisk]",
+	"[Save HardDisk]",
 	"[Eject HardDisk]",
 #endif // HDD_NEXTOR    HDD_IDE     MEGASCSI_HD
 	"",
@@ -3612,6 +3613,11 @@ void systemMenu()
 			{
 				AutoSaveHDD();
 				BrowseROM(0, BROWSE_HDD);
+				return;
+			}
+			else if(selectmenu == "[Save HardDisk]")
+			{
+				AutoSaveHDD();
 				return;
 			}
 			else if (selectmenu == "[Eject HardDisk]")
