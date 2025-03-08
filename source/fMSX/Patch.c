@@ -386,6 +386,7 @@ case 0x4010:
                 return;
             }
 
+#ifdef HFE_DISK
             if (isLoadDer & 0x04)
             {
                 if (derBuf[(R->DE.W >> 3) + 400] & (0x80 >> (R->DE.W & 0x07)))
@@ -405,6 +406,7 @@ case 0x4010:
                     }
                 }
             }
+#endif // HFE_DISK
 
             for (J = 0; J < 512; J++) WrZ80(Addr++, Buf[J]);
         }
@@ -421,13 +423,16 @@ case 0x4010:
         /* RuMSX's ".der" file for copy protected disk. */
     if (isLoadDer)
     {
+#ifdef HFE_DISK
         if (isLoadDer & 0x01)
         {
+#endif // HFE_DISK
             if (derBuf[R->DE.W >> 3] & (0x80 >> (R->DE.W & 0x07)))
             {
                 if (Verbose & 0x04) printf("CRC Error Sector %d (Copy Protected)\n", R->DE.W);
                 R->AF.W = 0x0401; return;
             }
+#ifdef HFE_DISK
         }
         if (isLoadDer & 0x02)
         {
@@ -440,6 +445,7 @@ case 0x4010:
                 }
             }
         }
+#endif // HFE_DISK
     }
     
     /* Return "Success" */
