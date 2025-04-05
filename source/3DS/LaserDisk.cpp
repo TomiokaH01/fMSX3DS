@@ -76,30 +76,13 @@ th_ycbcr_buffer yuv;
 
 Handle y2rEvent;
 
-ogg_sync_state	oggSyncState;
-ogg_page oggPage;
-ogg_packet oggPacket;
-ogg_stream_state oggStreamState;
-ogg_stream_state oggStreamState1;
-th_info	ThInfo;
-th_comment Thcomment;
-th_dec_ctx* ThDecCTX = NULL;
-th_setup_info* ThSetupInfo = NULL;
-ogg_int64_t granulePos = 0;
-th_pixel_fmt thPixelFormat;
-
 #include "video.h"
 
 THEORA_Context vidCtx;
-Thread vthread = NULL;
 
-th_ycbcr_buffer yubuf;
-unsigned short* LDBuf;
 s16* LDSoundBuf;
 float scaleframe = 1.0f;
 int LDSoundMulti = 0;
-
-int LCDisplaying = false;
 THEORA_videoinfo* vinfo;
 THEORA_audioinfo* ainfo;
 
@@ -565,19 +548,19 @@ void LD700changeFile(const char* filepath)
 
 	if (!isOgg(filepath))
 	{
-		printf("The file is not an ogg file.\n");
+		if (Verbose)printf("The file is not an ogg file.\n");
 		return;
 	}
 
 	if ((ret = THEORA_Create(&vidCtx, filepath)))
 	{
-		printf("THEORA_Create exited with error, %d.\n", ret);
+		if (Verbose)printf("THEORA_Create exited with error, %d.\n", ret);
 		return;
 	}
 
 	if (!THEORA_HasVideo(&vidCtx) && !THEORA_HasAudio(&vidCtx))
 	{
-		printf("No audio or video stream could be found.\n");
+		if (Verbose)printf("No audio or video stream could be found.\n");
 		return;
 	}
 
@@ -589,18 +572,17 @@ void LD700changeFile(const char* filepath)
 		scaleframe = getFrameScalef(vinfo->width, vinfo->height, 320, 240);
 	}
 
-	printf("Theora Create sucessful.\n");
+	if (Verbose)printf("Theora Create sucessful.\n");
 
-	if (Verbose)printf("frame width:%d", vinfo->width);
-	if (Verbose)printf("frame height%d", vinfo->height);
-	if (Verbose)printf("FPS:%d", vinfo->fps);
-	if (Verbose)printf("Color Space:%d", vinfo->colorspace);
+	if (Verbose)printf("frame width:%d ", vinfo->width);
+	if (Verbose)printf("frame height%d ", vinfo->height);
+	if (Verbose)printf("FPS:%d ", vinfo->fps);
+	if (Verbose)printf("Color Space:%d ", vinfo->colorspace);
 	if (Verbose)printf("Pixel Format%d\n", vinfo->fmt);
 
-	if (Verbose)printf("Audio Rate %d", ainfo->rate);
+	if (Verbose)printf("Audio Rate %d ", ainfo->rate);
 	if (Verbose)printf("Audio Channels %d\n", ainfo->channels);
 
-	granulePos = 0;
 	InitLaserDiskTexture(bitCeil((float)vinfo->width), bitCeil((float)vinfo->height));
 	if (!IsLaserDisk)
 	{
@@ -610,13 +592,13 @@ void LD700changeFile(const char* filepath)
 		SoundChannels = 1;
 		SDL_CloseAudio();
 		InitAudio(SoundSampRate ? 44100 : 22050, 150);
-		if ((ainfo->rate >= 44100) && !(SoundSampRate))LDSoundMulti = 1;
+		LDSoundMulti = (ainfo->rate >= 44100) && !(SoundSampRate) ? 1 : 0;
 	}
 	IsPlayLaserDisk = 1;
 }
 
 
-void LD700UpdateVideo(C3D_Tex ldtex)
+void LD700UpdateVideo(void)
 {
 	if (THEORA_eos(&vidCtx))
 	{
@@ -626,7 +608,6 @@ void LD700UpdateVideo(C3D_Tex ldtex)
 
 	if (THEORA_HasVideo(&vidCtx))
 	{
-		//th_ycbcr_buffer ybr;
 		if (THEORA_getvideo(&vidCtx, yuv))
 		{
 			bool isBusy = true;
@@ -659,7 +640,10 @@ void LD700UpdateVideo(C3D_Tex ldtex)
 			Y2RU_SetSendingV(yuv[2].data, (vinfo->width / 2) * (vinfo->height / 2), vinfo->width / 2,
 				yuv[2].stride - (vinfo->width >> 1));
 
-			Y2RU_SetReceiving(ldtex.data, vinfo->width * vinfo->height * 2, vinfo->width * 8 * 2,
+			//Y2RU_SetReceiving(ldtex.data, vinfo->width * vinfo->height * 2, vinfo->width * 8 * 2,
+			//	(bitCeil((float)vinfo->width) - vinfo->width) * 8 * 2);
+
+			Y2RU_SetReceiving(LaserDiskTex.data, vinfo->width * vinfo->height * 2, vinfo->width * 8 * 2,
 				(bitCeil((float)vinfo->width) - vinfo->width) * 8 * 2);
 
 			Y2RU_StartConversion();
@@ -683,14 +667,13 @@ void DoCalcAudioLD(int size)
 {
 	if (THEORA_HasAudio(&vidCtx))
 	{
-		THEORA_readaudio(&vidCtx, (char*)LDSoundBuf, size);
+		THEORA_readaudio(&vidCtx, (char*)LDSoundBuf, LDSoundMulti ? size<<1 : size);
 	}
 }
 
 
 void TrashLaserDisk(void)
 {
-	//free(LDBuf);
 	if(videoFile)fclose(videoFile);
 	if (IsLaserDisk)
 	{
