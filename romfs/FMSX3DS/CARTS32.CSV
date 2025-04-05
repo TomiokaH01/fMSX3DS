@@ -12,6 +12,8 @@ F6686519,ASC16,none		; FMPCM Demo by Laurens Holst(The Powerpuff Girls)
 5D6C4D27,FMPAC,none		; FM Pana Amusement Cartridge(Panasonic)
 0E84505D,FMPAC,none		; FM Pana Amusement Cartridge(Panasonic)(64kb)
 
+A5D0C0B9,PX7EXT,none		; PX-7 P-Basic ROM Cartridge for LaserDisk(Pioneer)
+
 ;Konimai SCCPlus hacked ROMs
 037D1ED8,SCCPLUS,none		; Antarctic Adventure(SCC Plus)(Konami)
 619B4B4A,SCCPLUS,none		; Gradius(Nemesis)(SCC Plus)(Konami)
